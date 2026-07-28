@@ -1,11 +1,36 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import Any
 
 from .config import load_config, with_overrides
+
+
+QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE = (
+    "{% for message in messages %}"
+    "{{ '<|im_start|>' + message['role'] + '\\n' }}"
+    "{% if message['role'] == 'assistant' %}"
+    "{% generation %}{{ message['content'] + '<|im_end|>\\n' }}{% endgeneration %}"
+    "{% else %}{{ message['content'] + '<|im_end|>\\n' }}{% endif %}"
+    "{% endfor %}"
+    "{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}"
+)
+
+
+def ensure_assistant_mask_chat_template(
+    tokenizer: Any, assistant_only_loss: bool
+) -> bool:
+    """Install a Qwen-compatible template with generation spans when needed."""
+    if not assistant_only_loss:
+        return False
+    template = tokenizer.chat_template or ""
+    if "{% generation %}" in template and "{% endgeneration %}" in template:
+        return False
+    tokenizer.chat_template = QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE
+    return True
 
 
 def _dtype(torch: Any, name: str) -> Any:
@@ -20,10 +45,39 @@ def _dtype(torch: Any, name: str) -> Any:
         raise ValueError(f"不支持的 compute_dtype: {name}") from error
 
 
+def load_stage_rows(path: str | Path, stage: str) -> list[dict[str, Any]]:
+    """Load only trainer-facing fields so heterogeneous metadata cannot break Arrow."""
+    if stage not in {"cpt", "sft"}:
+        raise ValueError(f"不支持的训练阶段: {stage}")
+    field = "text" if stage == "cpt" else "messages"
+    rows: list[dict[str, Any]] = []
+    with Path(path).open("r", encoding="utf-8-sig") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"{path}:{line_number}: JSON 无效: {error}") from error
+            value = record.get(field) if isinstance(record, dict) else None
+            if stage == "cpt" and (not isinstance(value, str) or not value.strip()):
+                raise ValueError(f"{path}:{line_number}: CPT 记录缺少非空 text")
+            if stage == "sft" and (not isinstance(value, list) or not value):
+                raise ValueError(f"{path}:{line_number}: SFT 记录缺少非空 messages")
+            rows.append({field: value})
+    if not rows:
+        raise ValueError(f"{path}: 没有可用的 {stage.upper()} 记录")
+    return rows
+
+
 def run_training(config: dict[str, Any]) -> None:
     import torch
-    from datasets import load_dataset
-    from peft import LoraConfig
+    from datasets import Dataset, DatasetDict
+    from peft import (
+        LoraConfig,
+        PeftModel,
+        prepare_model_for_kbit_training,
+    )
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
@@ -31,6 +85,9 @@ def run_training(config: dict[str, Any]) -> None:
     quant = config.get("quantization", {})
     training = config["training"]
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    gradient_checkpointing = bool(training.get("gradient_checkpointing", True))
+    assistant_only_loss = bool(training.get("assistant_only_loss", False))
 
     quantization_config = None
     if quant.get("enabled", True):
@@ -47,45 +104,79 @@ def run_training(config: dict[str, Any]) -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    if stage == "sft":
+        ensure_assistant_mask_chat_template(tokenizer, assistant_only_loss)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        config["base_model"],
-        quantization_config=quantization_config,
-        torch_dtype=_dtype(torch, quant.get("compute_dtype", "bfloat16")),
-        device_map={"": local_rank},
-    )
+    model_kwargs = {
+        "quantization_config": quantization_config,
+        "torch_dtype": _dtype(torch, quant.get("compute_dtype", "bfloat16")),
+        "device_map": {"": local_rank},
+    }
+    attn_implementation = training.get("attn_implementation")
+    if attn_implementation:
+        model_kwargs["attn_implementation"] = attn_implementation
+    model = AutoModelForCausalLM.from_pretrained(config["base_model"], **model_kwargs)
     model.config.use_cache = False
 
-    data_files = {"train": config["train_file"]}
+    init_adapter = config.get("init_adapter")
+    peft_config = None
+    if init_adapter:
+        adapter_path = Path(init_adapter)
+        if not adapter_path.exists():
+            raise FileNotFoundError(f"初始 LoRA 适配器不存在: {adapter_path}")
+        if quantization_config is not None:
+            model = prepare_model_for_kbit_training(
+                model,
+                use_gradient_checkpointing=gradient_checkpointing,
+                gradient_checkpointing_kwargs={"use_reentrant": False},
+            )
+        model = PeftModel.from_pretrained(
+            model,
+            str(adapter_path),
+            is_trainable=True,
+        )
+
+    dataset_splits = {
+        "train": Dataset.from_list(load_stage_rows(config["train_file"], stage))
+    }
     eval_path = config.get("eval_file")
     if eval_path and Path(eval_path).exists():
-        data_files["eval"] = eval_path
-    datasets = load_dataset("json", data_files=data_files)
+        dataset_splits["eval"] = Dataset.from_list(load_stage_rows(eval_path, stage))
+    datasets = DatasetDict(dataset_splits)
 
     lora = config["lora"]
-    peft_config = LoraConfig(
-        r=int(lora.get("r", 32)),
-        lora_alpha=int(lora.get("alpha", 64)),
-        lora_dropout=float(lora.get("dropout", 0.05)),
-        target_modules=lora.get("target_modules", "all-linear"),
-        bias=lora.get("bias", "none"),
-        task_type="CAUSAL_LM",
-    )
+    if not init_adapter:
+        peft_config = LoraConfig(
+            r=int(lora.get("r", 32)),
+            lora_alpha=int(lora.get("alpha", 64)),
+            lora_dropout=float(lora.get("dropout", 0.05)),
+            target_modules=lora.get("target_modules", "all-linear"),
+            bias=lora.get("bias", "none"),
+            task_type="CAUSAL_LM",
+        )
 
     report_to = training.get("report_to", "none")
     report_targets = [] if report_to in {None, "none"} else [report_to]
     eval_enabled = "eval" in datasets
-
-    sft_args = SFTConfig(
+    train_batch_size = int(training.get("per_device_train_batch_size", 1))
+    accumulation_steps = int(training.get("gradient_accumulation_steps", 16))
+    dataloader_workers = int(training.get("dataloader_num_workers", 0))
+    sft_kwargs = dict(
         output_dir=config["output_dir"],
         seed=int(config.get("seed", 42)),
         max_length=int(training.get("max_length", 2048)),
         packing=bool(training.get("packing", True)),
-        assistant_only_loss=bool(training.get("assistant_only_loss", False)),
-        per_device_train_batch_size=int(training.get("per_device_train_batch_size", 1)),
+        packing_strategy=training.get("packing_strategy", "bfd"),
+        padding_free=bool(training.get("padding_free", False)),
+        eval_packing=training.get("eval_packing"),
+        assistant_only_loss=assistant_only_loss,
+        per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=int(training.get("per_device_eval_batch_size", 1)),
-        gradient_accumulation_steps=int(training.get("gradient_accumulation_steps", 16)),
-        gradient_checkpointing=bool(training.get("gradient_checkpointing", True)),
+        gradient_accumulation_steps=accumulation_steps,
+        gradient_checkpointing=gradient_checkpointing,
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if gradient_checkpointing else None
+        ),
         learning_rate=float(training.get("learning_rate", 1e-4)),
         num_train_epochs=float(training.get("num_train_epochs", 1)),
         warmup_ratio=float(training.get("warmup_ratio", 0.03)),
@@ -99,9 +190,45 @@ def run_training(config: dict[str, Any]) -> None:
         save_total_limit=int(training.get("save_total_limit", 3)),
         bf16=bool(training.get("bf16", True)),
         fp16=bool(training.get("fp16", False)),
+        tf32=bool(training.get("tf32", False)),
+        max_grad_norm=float(training.get("max_grad_norm", 1.0)),
+        ddp_find_unused_parameters=bool(
+            training.get("ddp_find_unused_parameters", False)
+        ),
+        ddp_bucket_cap_mb=training.get("ddp_bucket_cap_mb"),
+        ddp_broadcast_buffers=bool(training.get("ddp_broadcast_buffers", False)),
+        group_by_length=bool(training.get("group_by_length", False)),
+        dataloader_num_workers=dataloader_workers,
+        dataloader_pin_memory=bool(training.get("dataloader_pin_memory", True)),
+        dataloader_persistent_workers=bool(
+            training.get("dataloader_persistent_workers", dataloader_workers > 0)
+        ),
+        optim=training.get("optim", "adamw_torch"),
+        max_steps=int(training.get("max_steps", -1)),
         report_to=report_targets,
         dataset_text_field="text" if stage == "cpt" else None,
     )
+    if dataloader_workers > 0:
+        sft_kwargs["dataloader_prefetch_factor"] = int(
+            training.get("dataloader_prefetch_factor", 2)
+        )
+    sft_args = SFTConfig(**sft_kwargs)
+
+    if local_rank == 0:
+        startup_metrics = {
+            "world_size": world_size,
+            "per_device_train_batch_size": train_batch_size,
+            "gradient_accumulation_steps": accumulation_steps,
+            "effective_global_batch_size": (
+                world_size * train_batch_size * accumulation_steps
+            ),
+            "compute_dtype": quant.get("compute_dtype", "bfloat16"),
+            "packing": sft_args.packing,
+            "packing_strategy": sft_args.packing_strategy,
+            "group_by_length": sft_args.group_by_length,
+            "attention": attn_implementation or "model_default",
+        }
+        print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))
 
     trainer = SFTTrainer(
         model=model,
@@ -111,6 +238,14 @@ def run_training(config: dict[str, Any]) -> None:
         processing_class=tokenizer,
         peft_config=peft_config,
     )
+    if training.get("sanitize_nonfinite_gradients", False):
+        for parameter in trainer.model.parameters():
+            if parameter.requires_grad:
+                parameter.register_hook(
+                    lambda gradient: gradient.nan_to_num(
+                        nan=0.0, posinf=0.0, neginf=0.0
+                    )
+                )
     trainer.train(resume_from_checkpoint=training.get("resume_from_checkpoint"))
     trainer.save_model(config["output_dir"])
     tokenizer.save_pretrained(config["output_dir"])
@@ -122,6 +257,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--train-file")
     parser.add_argument("--eval-file")
     parser.add_argument("--output-dir")
+    parser.add_argument("--init-adapter")
+    parser.add_argument("--max-steps", type=int)
+    parser.add_argument("--resume-from-checkpoint")
     return parser
 
 
@@ -132,10 +270,12 @@ def main() -> None:
         train_file=args.train_file,
         eval_file=args.eval_file,
         output_dir=args.output_dir,
+        init_adapter=args.init_adapter,
+        max_steps=args.max_steps,
+        resume_from_checkpoint=args.resume_from_checkpoint,
     )
     run_training(config)
 
 
 if __name__ == "__main__":
     main()
-

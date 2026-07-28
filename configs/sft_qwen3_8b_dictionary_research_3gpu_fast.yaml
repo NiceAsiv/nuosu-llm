@@ -1,0 +1,59 @@
+stage: sft
+base_model: Qwen/Qwen3-8B-Base
+init_adapter: outputs/qwen3-8b-nuosu-ocr-gt-cpt-3gpu-stable
+train_file: ../nuosu-corpus/data/processed/yixueyanjiu_dictionary_sft/train.jsonl
+eval_file: ../nuosu-corpus/data/processed/yixueyanjiu_dictionary_sft/validation.jsonl
+output_dir: outputs/qwen3-8b-nuosu-dictionary-sft-3gpu-fast
+seed: 42
+
+data_policy: academic_research_with_source_attribution
+
+quantization:
+  enabled: true
+  bits: 4
+  quant_type: nf4
+  double_quant: true
+  compute_dtype: bfloat16
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+  bias: none
+
+training:
+  # Profiled on 92,534 rows: p99=54, max=121, so 128 loses no examples.
+  max_length: 128
+  packing: false
+  assistant_only_loss: true
+  # Each GPU processes 32 independent rows, then DDP aggregates once.
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  learning_rate: 0.00008
+  num_train_epochs: 2
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lr_scheduler_type: cosine
+  logging_steps: 10
+  eval_steps: 500
+  save_steps: 500
+  save_total_limit: 3
+  bf16: true
+  fp16: false
+  tf32: true
+  attn_implementation: sdpa
+  group_by_length: true
+  dataloader_num_workers: 4
+  dataloader_prefetch_factor: 2
+  dataloader_pin_memory: true
+  dataloader_persistent_workers: true
+  optim: adamw_torch_fused
+  max_grad_norm: 1.0
+  ddp_find_unused_parameters: false
+  ddp_broadcast_buffers: false
+  sanitize_nonfinite_gradients: true
+  report_to: none
+  resume_from_checkpoint: null

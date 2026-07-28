@@ -38,6 +38,9 @@ def with_overrides(
     train_file: str | None = None,
     eval_file: str | None = None,
     output_dir: str | None = None,
+    init_adapter: str | None = None,
+    max_steps: int | None = None,
+    resume_from_checkpoint: str | None = None,
 ) -> dict[str, Any]:
     updated = deepcopy(config)
     if train_file:
@@ -46,5 +49,10 @@ def with_overrides(
         updated["eval_file"] = eval_file
     if output_dir:
         updated["output_dir"] = output_dir
+    if init_adapter:
+        updated["init_adapter"] = init_adapter
+    if max_steps is not None:
+        updated["training"]["max_steps"] = max_steps
+    if resume_from_checkpoint:
+        updated["training"]["resume_from_checkpoint"] = resume_from_checkpoint
     return updated
-

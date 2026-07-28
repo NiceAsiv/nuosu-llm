@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import argparse
+import json
+import math
+from pathlib import Path
+from typing import Any
+
+from transformers import AutoTokenizer
+
+from nuosu_llm.config import load_config
+from nuosu_llm.training import (
+    ensure_assistant_mask_chat_template,
+    load_stage_rows,
+)
+
+
+def percentile(sorted_values: list[int], fraction: float) -> int:
+    if not sorted_values:
+        return 0
+    index = min(len(sorted_values) - 1, math.ceil(fraction * len(sorted_values)) - 1)
+    return sorted_values[max(index, 0)]
+
+
+def grouped_padding_tokens(lengths: list[int], batch_size: int) -> int:
+    ordered = sorted(lengths)
+    padded = 0
+    for offset in range(0, len(ordered), batch_size):
+        batch = ordered[offset : offset + batch_size]
+        padded += max(batch) * len(batch)
+    return padded
+
+
+def token_length(
+    tokenizer: Any,
+    row: dict[str, Any],
+    stage: str,
+) -> int:
+    if stage == "sft":
+        token_ids = tokenizer.apply_chat_template(
+            row["messages"],
+            tokenize=True,
+            add_generation_prompt=False,
+        )
+    else:
+        token_ids = tokenizer(row["text"], add_special_tokens=True)["input_ids"]
+    return len(token_ids)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Profile token lengths and batching efficiency for a training config"
+    )
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--limit", type=int)
+    args = parser.parse_args()
+
+    config = load_config(args.config)
+    stage = config["stage"]
+    rows = load_stage_rows(config["train_file"], stage)
+    if args.limit:
+        rows = rows[: args.limit]
+
+    tokenizer = AutoTokenizer.from_pretrained(config["base_model"], use_fast=True)
+    if stage == "sft":
+        ensure_assistant_mask_chat_template(
+            tokenizer,
+            bool(config["training"].get("assistant_only_loss", False)),
+        )
+
+    max_length = int(config["training"].get("max_length", 2048))
+    raw_lengths = [token_length(tokenizer, row, stage) for row in rows]
+    lengths = [min(length, max_length) for length in raw_lengths]
+    ordered = sorted(lengths)
+    total_tokens = sum(lengths)
+    padded_tokens = grouped_padding_tokens(lengths, args.batch_size)
+    packed_sequences = math.ceil(total_tokens / max_length)
+
+    result = {
+        "config": str(Path(args.config)),
+        "samples": len(lengths),
+        "max_length": max_length,
+        "truncated_samples": sum(length > max_length for length in raw_lengths),
+        "raw_max_length": max(raw_lengths),
+        "tokens": {
+            "total": total_tokens,
+            "mean": round(total_tokens / len(lengths), 2),
+            "p50": percentile(ordered, 0.50),
+            "p90": percentile(ordered, 0.90),
+            "p95": percentile(ordered, 0.95),
+            "p99": percentile(ordered, 0.99),
+            "max": max(ordered),
+        },
+        "length_grouped_batching": {
+            "batch_size": args.batch_size,
+            "padding_efficiency": round(total_tokens / padded_tokens, 4),
+        },
+        "theoretical_packing": {
+            "fixed_length_sequences": packed_sequences,
+            "samples_per_sequence": round(len(lengths) / packed_sequences, 2),
+            "compression_ratio": round(len(lengths) / packed_sequences, 2),
+        },
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

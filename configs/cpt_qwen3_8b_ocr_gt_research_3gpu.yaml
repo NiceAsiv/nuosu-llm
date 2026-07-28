@@ -1,0 +1,53 @@
+stage: cpt
+base_model: Qwen/Qwen3-8B-Base
+train_file: ../nuosu-corpus/data/processed/nuosubburma_ocr_gt_research/train.jsonl
+eval_file: ../nuosu-corpus/data/processed/nuosubburma_ocr_gt_research/validation.jsonl
+output_dir: outputs/qwen3-8b-nuosu-ocr-gt-cpt-3gpu-stable
+seed: 42
+
+# Three-process DDP on 3 x RTX 3090.
+# Global micro-batch is 3 * 1 * 5 = 15, close to the single-GPU baseline of 16.
+data_policy: academic_research_with_source_attribution
+
+quantization:
+  enabled: true
+  bits: 4
+  quant_type: nf4
+  double_quant: true
+  # FP32 compute avoids the NaN gradients observed with BF16 QLoRA on RTX 3090.
+  compute_dtype: float32
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+  bias: none
+
+training:
+  max_length: 2048
+  # TRL padding-free packing needs a supported FlashAttention backend.
+  packing: false
+  assistant_only_loss: false
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 5
+  gradient_checkpointing: true
+  learning_rate: 0.00005
+  num_train_epochs: 3
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lr_scheduler_type: cosine
+  logging_steps: 1
+  eval_steps: 5
+  save_steps: 5
+  save_total_limit: 3
+  bf16: false
+  fp16: false
+  tf32: true
+  max_grad_norm: 1.0
+  ddp_find_unused_parameters: false
+  # Prevent isolated non-finite frozen-base backward values from poisoning LoRA.
+  sanitize_nonfinite_gradients: true
+  report_to: none
+  resume_from_checkpoint: null

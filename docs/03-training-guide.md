@@ -108,6 +108,9 @@ python scripts/train.py \
 
 SFT 使用 `assistant_only_loss: true`，只在 assistant 输出部分计算损失。若模型的 chat template 不支持 generation mask，应停止训练并检查模板，不能默默退化为全序列 loss。
 
+本仓库会在 Qwen3 Base 模板缺少 `{% generation %}` 区段时安装兼容的 ChatML 模板，并要求
+tokenizer 返回 assistant mask。更换基础模型时仍应先做短基准，确认 assistant token 数量非零。
+
 ## 7. 多卡
 
 8B QLoRA 可在单张 24GB RTX 3090 上以 2K 上下文、micro batch 1 起步。单卡通常最稳定；只有吞吐量或更大模型确实需要时再使用多卡：
@@ -120,6 +123,48 @@ accelerate launch --num_processes 3 \
 ```
 
 三张 RTX 3090 若没有 NVLink，跨卡通信走 PCIe。多卡可以提高吞吐量，但不会自动把有效 batch、学习率和保存策略调到合理值。
+
+数据并行的有效全局 batch 为：
+
+```text
+world_size × per_device_train_batch_size × gradient_accumulation_steps
+```
+
+短样本应优先增加 `per_device_train_batch_size`，让一次前后向覆盖更多 token，再减少梯度累积。
+不要让每张卡连续跑多个 batch=1 的微批次后才同步。推荐流程：
+
+```bash
+python scripts/profile_dataset.py \
+  --config configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  --batch-size 32
+
+bash scripts/benchmark_throughput.sh \
+  configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  30 \
+  outputs/previous-adapter-or-checkpoint
+```
+
+基准至少检查：
+
+- 最大显存保留 1GB 以上余量；
+- 三张卡稳定阶段利用率，而不是模型加载时的瞬时值；
+- `train_samples_per_second` 和 `num_tokens`；
+- loss、gradient norm 是否有限；
+- 第一轮 eval 是否成功。
+
+对于长度长尾明显的数据，启用 `group_by_length`，并根据 P99 而不是最大值选择 batch。确需保留
+极少数超长样本时，可把它们拆成独立的长上下文阶段，避免所有短样本都使用 batch=1。
+
+本仓库提供可复现的 token 长度分桶：
+
+```bash
+python scripts/bucket_sft_by_length.py \
+  --config configs/sft_qwen3_8b_nuosubench_research_3gpu.yaml \
+  --threshold 512 \
+  --output-dir ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets
+```
+
+短阶段和长阶段必须沿用同一 adapter；不能把两个阶段各自从基础模型开始后再尝试合并。
 
 ## 8. 断点恢复
 

@@ -138,6 +138,55 @@ python scripts/train.py \
   --output-dir /data0/nuosu-checkpoints/qwen3-8b-cpt
 ```
 
+### 多卡吞吐优化
+
+三卡训练使用数据并行：每张卡处理不同的 micro-batch，反向完成后聚合梯度。短样本不能只把
+`nproc_per_node` 改为 3；如果每卡仍然只有一条几十 token 的样本，GPU 会长期等待 Python、
+kernel launch 和 PCIe 梯度同步。
+
+先画像，再基准，最后正式训练：
+
+```bash
+# 统计 p50/p90/p99/max token 长度、截断数和分桶效率
+python scripts/profile_dataset.py \
+  --config configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  --batch-size 32
+
+# GPU 空闲时执行独立的 30-step 三卡吞吐基准
+bash scripts/benchmark_throughput.sh \
+  configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  30 \
+  outputs/previous-adapter-or-checkpoint
+```
+
+`benchmark_throughput.sh` 检测到已有 GPU 计算进程时会拒绝启动，基准结果写入
+`logs/benchmarks/`，模型写入 `outputs/benchmarks/`。仓库提供的 `*_3gpu_fast.yaml` 使用
+BF16、SDPA、长度分桶、更大的单卡 batch、fused AdamW、后台数据加载和较低的
+eval/checkpoint 频率。batch 应由真实 token 长度和短基准决定，不能仅按样本条数猜测。
+
+串行运行 OCR CPT、词典 SFT 和 NuosuBench SFT：
+
+```bash
+DICTIONARY_INIT_ADAPTER=outputs/existing-dictionary-checkpoint \
+  bash scripts/run_overnight_pipeline.sh
+```
+
+若不设置 `DICTIONARY_INIT_ADAPTER`，词典阶段从配置文件中的 `init_adapter` 开始。词典成功后，
+流水线才会启动 NuosuBench；任何阶段失败都会终止流水线。
+
+NuosuBench 会先按 512 token 分成短样本主阶段和长尾补充阶段。这样短样本保持较大的单卡
+batch，长样本不会因为主阶段的 512-token 上限而消失：
+
+```bash
+python scripts/bucket_sft_by_length.py \
+  --config configs/sft_qwen3_8b_nuosubench_research_3gpu.yaml \
+  --threshold 512 \
+  --output-dir ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets
+```
+
+分桶清单会记录每个 split 的总数、短/长样本数和最长 token 数。长尾阶段在独立配置中使用小
+batch，并继续训练短样本阶段的 adapter。
+
 ### 使用 Hugging Face 语料或自建语料
 
 下游用户不必保持两个仓库相邻。可以先从 Hugging Face 下载发布版语料，并固定实际使用的
@@ -183,9 +232,9 @@ python scripts/train.py \
 5. 将 SFT 配置中的 `base_model` 改为合并后的 CPT 模型路径，再做 SFT；
 6. 只在模型和配置确定后运行保留 test。
 
-注意：分别运行默认 CPT 和 SFT 配置会得到两个独立的 QLoRA adapter。若目标是
-“CPT 后继续 SFT”，不能让 SFT 再从 `Qwen/Qwen3-8B-Base` 开始；应先合并 CPT adapter，
-再把合并目录设为 SFT 的 `base_model`。
+若目标是 “CPT 后继续 SFT”，可先合并 CPT adapter 并把合并目录设为 SFT 的
+`base_model`，也可在 SFT 配置中设置 `init_adapter`，继续训练同一个 LoRA adapter。不要让
+SFT 在没有 `init_adapter` 的情况下重新从 `Qwen/Qwen3-8B-Base` 开始。
 
 ### 评测
 
@@ -333,13 +382,39 @@ python scripts/train.py \
   --output-dir /data0/checkpoints/qwen3-8b-my-sft
 ```
 
+### Multi-GPU throughput
+
+Three-GPU runs use data parallelism: every GPU processes a different micro-batch and gradients are
+aggregated after backward. Very short records remain inefficient if each GPU receives only one record.
+Profile token lengths first, then run an isolated short benchmark:
+
+```bash
+python scripts/profile_dataset.py \
+  --config configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  --batch-size 32
+
+bash scripts/benchmark_throughput.sh \
+  configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  30 \
+  outputs/previous-adapter-or-checkpoint
+```
+
+The benchmark refuses to start while another GPU compute process is active. The `*_3gpu_fast.yaml`
+profiles use BF16, SDPA, length grouping, larger per-device batches, fused AdamW, background data
+loading, and less frequent evaluation/checkpointing. Always select batch size from measured token
+lengths and a short stability benchmark.
+
+For datasets with a small long-context tail, `bucket_sft_by_length.py` creates reproducible short and
+long JSONL buckets plus a manifest. The main stage keeps a large batch for short rows, while a
+follow-up low-batch stage continues the same adapter on long rows instead of silently truncating them.
+
 Build and validate custom splits with `prepare_corpus.py`, `prepare_sft.py`, and
 `validate_dataset.py` in the `nuosu-corpus` repository. Record the Dataset ID, exact revision, build
 parameters, and statistics before training.
 
-For sequential CPT then SFT, first merge the CPT adapter and set the merged directory as `base_model`
-in the SFT configuration. Running both default configurations unchanged creates two independent
-adapters from `Qwen/Qwen3-8B-Base`; it does not continue SFT from CPT automatically.
+For sequential CPT then SFT, either merge the CPT adapter and use the merged model as `base_model`, or
+set `init_adapter` in the SFT configuration to continue training the same LoRA adapter. Omitting both
+starts an independent adapter from `Qwen/Qwen3-8B-Base`.
 
 Fetch the evaluation benchmark:
 
