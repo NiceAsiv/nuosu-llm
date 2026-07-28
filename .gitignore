@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.env
+
+outputs/
+checkpoints/
+artifacts/
+evaluation/nuosu_bench/
+evaluation/results/
+wandb/
+mlruns/
+*.gguf
+*.safetensors

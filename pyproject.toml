@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nuosu-llm"
+version = "0.1.0"
+description = "Training toolkit for a lightweight Nuosu language model"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Nuosu LLM Contributors" }]
+dependencies = [
+  "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+train = [
+  "torch>=2.4,<3",
+  "transformers>=4.51,<6",
+  "datasets>=3.5,<5",
+  "accelerate>=1.5,<2",
+  "peft>=0.15,<1",
+  "trl>=0.17,<1",
+  "bitsandbytes>=0.45,<1",
+  "sentencepiece>=0.2,<1",
+  "safetensors>=0.5,<1",
+]
+dev = [
+  "pytest>=8,<10",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+nuosu-train = "nuosu_llm.training:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
