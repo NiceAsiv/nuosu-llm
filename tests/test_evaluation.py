@@ -114,6 +114,12 @@ def test_target_language_inference():
         == "zh"
     )
     assert infer_target_language("“ꀀꁌ”的英文翻译是什么？", "test") == "en"
+    assert infer_target_language("请帮我把彝文“ꀀꁌ”译为汉语。", "测试") == "zh"
+    assert infer_target_language("How do you say “ꀀꁌ” in English?", "test") == "en"
+    assert (
+        infer_target_language('请判断："ꀀꁌ"翻译成"测试"是否正确？', "正确")
+        == "unknown"
+    )
     assert infer_target_language("回答问题") == "unknown"
 
 

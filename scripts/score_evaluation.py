@@ -17,6 +17,19 @@ _ZH_TARGET_PATTERNS = (
     "汉语翻译是什么",
     "翻译成中文",
     "翻译成汉语",
+    "翻译成普通话",
+    "翻译为中文",
+    "翻译为汉语",
+    "翻译为普通话",
+    "译成中文",
+    "译成汉语",
+    "译成普通话",
+    "译为中文",
+    "译为汉语",
+    "译为普通话",
+    "翻成中文",
+    "翻成汉语",
+    "翻成普通话",
     "用中文",
     "用汉语",
     "中文意思",
@@ -27,12 +40,19 @@ _ZH_TARGET_PATTERNS = (
     "转写为汉语",
     "中文怎么说",
     "汉语怎么说",
+    "普通话怎么说",
 )
 _YI_TARGET_PATTERNS = (
     "彝文翻译是什么",
     "彝语翻译是什么",
     "翻译成彝文",
     "翻译成彝语",
+    "翻译为彝文",
+    "翻译为彝语",
+    "译成彝文",
+    "译成彝语",
+    "译为彝文",
+    "译为彝语",
     "翻成彝文",
     "翻成彝语",
     "用彝文",
@@ -47,6 +67,14 @@ _EN_TARGET_PATTERNS = (
     "英语翻译是什么",
     "翻译成英文",
     "翻译成英语",
+    "翻译为英文",
+    "翻译为英语",
+    "译成英文",
+    "译成英语",
+    "译为英文",
+    "译为英语",
+    "翻成英文",
+    "翻成英语",
     "用英文",
     "用英语",
     "英文意思",
@@ -55,6 +83,20 @@ _EN_TARGET_PATTERNS = (
     "在英语中",
     "英文怎么说",
     "英语怎么说",
+    "in english",
+    "into english",
+    "english equivalent",
+    "english translation",
+    "standard english",
+    "mean in english",
+    "say it in english",
+)
+_OTHER_TASK_PATTERNS = (
+    "是否正确",
+    "判断",
+    "是否准确",
+    "验证翻译",
+    "选择",
 )
 
 
@@ -65,13 +107,20 @@ def compact_text(text: str) -> str:
 
 def infer_target_language(prompt: str, reference: str = "") -> str:
     normalized = normalize_text(prompt)
+    normalized_casefold = normalized.casefold()
+    if any(pattern in normalized for pattern in _OTHER_TASK_PATTERNS):
+        return "unknown"
     if any(pattern in normalized for pattern in _ZH_TARGET_PATTERNS):
         return "zh"
     if any(pattern in normalized for pattern in _YI_TARGET_PATTERNS):
         return "yi"
-    if any(pattern in normalized for pattern in _EN_TARGET_PATTERNS):
+    if any(pattern in normalized_casefold for pattern in _EN_TARGET_PATTERNS):
         return "en"
-    if any(is_yi_syllable(char) for char in normalize_text(reference)):
+    normalized_reference = normalize_text(reference)
+    reference_has_yi = any(is_yi_syllable(char) for char in normalized_reference)
+    if any(is_yi_syllable(char) for char in normalized) and not reference_has_yi:
+        return "zh"
+    if reference_has_yi:
         return "yi"
     return "unknown"
 
