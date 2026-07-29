@@ -25,3 +25,13 @@ bash scripts/pipeline/wait_for_recovery_then_train.sh \
 ```
 
 只有恢复日志明确包含 `recovery passed` 且校验标记存在时才会启动训练。
+
+如果 OCR CPT 和词典 SFT 已完成，而流水线在 NuosuBench 阶段中断，使用：
+
+```bash
+PYTHON_BIN=/absolute/path/to/python \
+bash scripts/pipeline/resume_after_dictionary.sh /absolute/path/to/verified-model
+```
+
+恢复脚本要求词典 adapter 完整存在、short/long 输出尚不存在且 GPU 空闲。单机三卡
+通信固定使用 loopback，并在 Accelerate 创建 barrier 前显式绑定 rank 与 CUDA 设备。

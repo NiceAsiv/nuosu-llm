@@ -44,6 +44,22 @@ def _dtype(torch: Any, name: str) -> Any:
         raise ValueError(f"不支持的 compute_dtype: {name}") from error
 
 
+def initialize_distributed_runtime(torch: Any, local_rank: int, world_size: int) -> None:
+    """Bind each torchrun rank to one GPU before Accelerate creates barriers."""
+    if not torch.cuda.is_available():
+        return
+    torch.cuda.set_device(local_rank)
+    if (
+        world_size > 1
+        and torch.distributed.is_available()
+        and not torch.distributed.is_initialized()
+    ):
+        torch.distributed.init_process_group(
+            backend="nccl",
+            device_id=torch.device("cuda", local_rank),
+        )
+
+
 def load_stage_rows(path: str | Path, stage: str) -> list[dict[str, Any]]:
     """Load only trainer-facing fields so heterogeneous metadata cannot break Arrow."""
     if stage not in {"cpt", "sft"}:
@@ -106,6 +122,7 @@ def run_training(config: dict[str, Any]) -> None:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     gradient_checkpointing = bool(training.get("gradient_checkpointing", True))
     assistant_only_loss = bool(training.get("assistant_only_loss", False))
+    initialize_distributed_runtime(torch, local_rank, world_size)
 
     quantization_config = None
     if quant.get("enabled", True):

@@ -6,6 +6,7 @@ from nuosu_llm.config import with_overrides
 from nuosu_llm.training import (
     QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE,
     ensure_assistant_mask_chat_template,
+    initialize_distributed_runtime,
     load_stage_rows,
     require_verified_base_model,
 )
@@ -14,6 +15,18 @@ from nuosu_llm.training import (
 class FakeTokenizer:
     def __init__(self, chat_template=None):
         self.chat_template = chat_template
+
+
+def test_distributed_runtime_is_noop_without_cuda():
+    class Cuda:
+        @staticmethod
+        def is_available():
+            return False
+
+    class Torch:
+        cuda = Cuda()
+
+    initialize_distributed_runtime(Torch(), local_rank=0, world_size=3)
 
 
 def test_cpt_loader_ignores_heterogeneous_metadata(tmp_path):

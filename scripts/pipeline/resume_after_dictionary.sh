@@ -4,17 +4,31 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "${SCRIPT_DIR}/../.." && pwd)}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-MODEL_DIR="${1:?usage: run_research_pipeline.sh /absolute/verified/model}"
+MODEL_DIR="${1:?usage: resume_after_dictionary.sh /absolute/verified/model}"
+DICTIONARY_ADAPTER="${PROJECT_DIR}/outputs/qwen3-8b-nuosu-dictionary-sft-3gpu-fast"
+SHORT_OUTPUT="${PROJECT_DIR}/outputs/qwen3-8b-nuosu-nuosubench-short-sft-3gpu-fast"
+LONG_OUTPUT="${PROJECT_DIR}/outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast"
 RUN_ID="$(date -u "+%Y%m%dT%H%M%SZ")"
-LOG_DIR="${PROJECT_DIR}/artifacts/pipeline/${RUN_ID}"
-GATE_MARKER="${PROJECT_DIR}/artifacts/gates/sft-overfit-64/PASSED"
+LOG_DIR="${PROJECT_DIR}/artifacts/pipeline-resume/${RUN_ID}"
 
 [[ -f "${MODEL_DIR}/VERIFIED.sha256" ]] || {
   echo "verified model marker missing: ${MODEL_DIR}/VERIFIED.sha256" >&2
   exit 2
 }
+[[ -f "${DICTIONARY_ADAPTER}/adapter_model.safetensors" ]] || {
+  echo "completed dictionary adapter missing: ${DICTIONARY_ADAPTER}" >&2
+  exit 2
+}
+[[ ! -e "${SHORT_OUTPUT}" ]] || {
+  echo "short-stage output already exists; isolate it before resuming: ${SHORT_OUTPUT}" >&2
+  exit 2
+}
+[[ ! -e "${LONG_OUTPUT}" ]] || {
+  echo "long-stage output already exists; isolate it before resuming: ${LONG_OUTPUT}" >&2
+  exit 2
+}
 if nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits | grep -q '[0-9]'; then
-  echo "GPU compute processes are active; refusing to overlap the pipeline." >&2
+  echo "GPU compute processes are active; refusing to overlap the resume run." >&2
   exit 2
 fi
 
@@ -24,12 +38,7 @@ cd "${PROJECT_DIR}"
 run_stage() {
   local stage_name="$1"
   local config_path="$2"
-  local output_path="$3"
 
-  [[ ! -e "${output_path}" ]] || {
-    echo "stage output already exists: ${output_path}" >&2
-    exit 2
-  }
   echo "[$(date -u "+%Y-%m-%dT%H:%M:%SZ")] starting ${stage_name}"
   env \
     HF_HUB_OFFLINE=1 \
@@ -50,28 +59,11 @@ run_stage() {
       --base-model "${MODEL_DIR}" 2>&1 | tee "${LOG_DIR}/${stage_name}.log"
 }
 
-if [[ -f "${GATE_MARKER}" ]] && [[ "$(cat -- "${GATE_MARKER}")" == "${MODEL_DIR}" ]]; then
-  echo "using passed SFT overfit gate: ${GATE_MARKER}"
-else
-  bash scripts/gates/run_sft_overfit_64.sh "${MODEL_DIR}" \
-    2>&1 | tee "${LOG_DIR}/gate-sft-overfit-64.log"
-fi
-
-run_stage \
-  cpt-ocr-gt \
-  configs/cpt_qwen3_8b_ocr_gt_research_3gpu.yaml \
-  outputs/qwen3-8b-nuosu-ocr-gt-cpt-3gpu-stable
-run_stage \
-  sft-dictionary \
-  configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
-  outputs/qwen3-8b-nuosu-dictionary-sft-3gpu-fast
 run_stage \
   sft-nuosubench-short \
-  configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml \
-  outputs/qwen3-8b-nuosu-nuosubench-short-sft-3gpu-fast
+  configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml
 run_stage \
   sft-nuosubench-long \
-  configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml \
-  outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast
+  configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml
 
-echo "pipeline completed; run validation generation before any held-out test"
+echo "resume pipeline completed; run validation generation before held-out testing"
