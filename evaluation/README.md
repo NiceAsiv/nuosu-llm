@@ -98,6 +98,9 @@ not a substitute for native-speaker review. A formal report should also
 include blind 1–5 ratings for accuracy, orthographic correctness, and fluency,
 with at least 100 samples from each major direction.
 
+当前第二轮自动评测报告：
+[`reports/2026-07-29-qwen3-8b-nuosu-formal.md`](reports/2026-07-29-qwen3-8b-nuosu-formal.md)。
+
 ## 上游完整基准 / Full upstream benchmark
 
 未使用 NuosuBench 训练的基础模型可下载完整上游测试集：
