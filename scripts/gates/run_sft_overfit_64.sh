@@ -8,7 +8,9 @@ MODEL_DIR="${1:?usage: run_sft_overfit_64.sh /absolute/verified/model}"
 SOURCE_DATA="${SOURCE_DATA:-${PROJECT_DIR}/../nuosu-corpus/data/processed/yixueyanjiu_dictionary_sft/train.jsonl}"
 GATE_DIR="${GATE_DIR:-${PROJECT_DIR}/artifacts/gates/sft-overfit-64}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/gates/qwen3-8b-sft-overfit-64}"
-CONFIG_PATH="${PROJECT_DIR}/configs/gates/sft_overfit_64.yaml"
+CONFIG_PATH="${CONFIG_PATH:-${PROJECT_DIR}/configs/gates/sft_overfit_64.yaml}"
+GATE_LABEL="${GATE_LABEL:-sft-overfit-64}"
+MAX_STEPS="${MAX_STEPS:-200}"
 TRAIN_FILE="${GATE_DIR}/train.jsonl"
 EVAL_FILE="${GATE_DIR}/eval.jsonl"
 GEN_FILE="${GATE_DIR}/generations.jsonl"
@@ -57,7 +59,8 @@ env \
     --base-model "${MODEL_DIR}" \
     --train-file "${TRAIN_FILE}" \
     --eval-file "${TRAIN_FILE}" \
-    --output-dir "${OUTPUT_DIR}" 2>&1 | tee "${LOG_FILE}"
+    --output-dir "${OUTPUT_DIR}" \
+    --max-steps "${MAX_STEPS}" 2>&1 | tee "${LOG_FILE}"
 
 env \
   HF_HUB_OFFLINE=1 \
@@ -79,7 +82,7 @@ env \
 
 "${PYTHON_BIN}" scripts/score_evaluation.py \
   --input "${GEN_FILE}" \
-  --label qwen3-8b-sft-overfit-64 \
+  --label "${GATE_LABEL}" \
   --output-json "${METRICS_FILE}" \
   --output-markdown "${GATE_DIR}/metrics.md"
 

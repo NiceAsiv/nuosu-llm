@@ -118,6 +118,18 @@ torchrun --standalone --nproc_per_node=NUM_GPUS \
   --base-model "${VERIFIED_MODEL}"
 ```
 
+面向较小算力的 1.7B 完整配方沿用 8B 的四阶段数据路线：OCR GT CPT、词典
+SFT、NuosuBench 短序列 SFT 和长尾序列 SFT。
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 NUM_GPUS=3 \
+  bash recipes/qwen3-1.7b-full/run.sh \
+  /absolute/path/to/verified/Qwen3-1.7B-Base
+```
+
+长尾阶段是较长的 benchmark 衍生样本，并非真正的多轮长对话语料。配方与单卡、
+双卡或更多 GPU 通用，`NUM_GPUS` 决定进程数。
+
 三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
 [`experiments/three-gpu-24gb/`](experiments/three-gpu-24gb/)，仅用于复现实验。
 
@@ -216,6 +228,7 @@ tests/                # 单元测试
 已通过底模校验、训练和正式评测的实验：
 
 - [`evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md)
+- [Qwen3-8B-Base Nuosu LoRA](https://huggingface.co/NiceAsiv/Qwen3-8B-Base-Nuosu-LoRA)
 
 损坏底模实验的结果只作为事故记录：
 

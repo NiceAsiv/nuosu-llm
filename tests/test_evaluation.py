@@ -24,8 +24,7 @@ def test_generation_stops_at_all_qwen_end_markers():
 
         @staticmethod
         def convert_tokens_to_ids(token: str) -> int:
-            assert token == "<|im_end|>"
-            return 151645
+            return {"<|im_end|>": 151645, "<|endoftext|>": 151643}[token]
 
     stop_ids = generation_stop_token_ids(Tokenizer())
     assert stop_ids == {151643, 151645}

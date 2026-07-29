@@ -12,13 +12,14 @@ def generation_stop_token_ids(tokenizer: Any) -> list[int]:
         if isinstance(eos_ids, int)
         else {int(token_id) for token_id in eos_ids or []}
     )
-    im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
-    if (
-        isinstance(im_end_id, int)
-        and im_end_id >= 0
-        and im_end_id != tokenizer.unk_token_id
-    ):
-        stop_ids.add(im_end_id)
+    for token in ("<|im_end|>", "<|endoftext|>"):
+        token_id = tokenizer.convert_tokens_to_ids(token)
+        if (
+            isinstance(token_id, int)
+            and token_id >= 0
+            and token_id != tokenizer.unk_token_id
+        ):
+            stop_ids.add(token_id)
     if not stop_ids:
         raise ValueError("tokenizer 没有可用的 EOS token")
     return sorted(stop_ids)

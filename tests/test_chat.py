@@ -24,7 +24,6 @@ def test_chat_uses_qwen_and_chatml_stop_tokens():
 
         @staticmethod
         def convert_tokens_to_ids(token: str) -> int:
-            assert token == "<|im_end|>"
-            return 151645
+            return {"<|im_end|>": 151645, "<|endoftext|>": 151643}[token]
 
     assert generation_stop_token_ids(Tokenizer()) == [151643, 151645]

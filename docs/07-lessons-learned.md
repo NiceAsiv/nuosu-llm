@@ -97,6 +97,21 @@ evaluation/reports/      评测结果和已作废实验记录
 正常用户只需一个训练入口：单卡直接运行 `scripts/train.py`，多卡用自己的 GPU 数量通过
 `torchrun --nproc_per_node=N` 启动同一入口。GPU 数量不是数据集或模型的固有要求。
 
+## 事故五：训练收敛但生成不会停止
+
+### 现象
+
+1.7B 词典门禁的 assistant token accuracy 达到 100%，64 条生成也全部包含 reference，
+但所有输出都跑满 `max_new_tokens`，因此 exact match、chrF2 和截断门禁失败。
+
+### 根因与修复
+
+Qwen3 Base 能稳定学习预训练结束符 `<|endoftext|>`，但该尺寸 tokenizer 对外声明的 EOS
+是 `<|im_end|>`；只按 tokenizer EOS 停止会漏掉模型实际生成的结束符。assistant-mask
+模板继续使用 `<|endoftext|>`，推理和评测同时接受 tokenizer EOS、`<|im_end|>` 和
+`<|endoftext|>`，并由回归测试锁定。过拟合门禁必须检查真实生成的 exact match、替换
+字符和长度截断，不能只根据训练 loss 放行。
+
 ## 仍需遵守的实验原则
 
 - loss 下降只能说明优化过程在工作，不能单独证明语言质量；

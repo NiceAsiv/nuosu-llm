@@ -8,6 +8,7 @@
 | 类型 | 配置 | 用途 |
 |---|---|---|
 | 门禁 | `gates/sft_overfit_64.yaml` | 64 条确定性过拟合，不用于发布 |
+| 配方 | `../recipes/qwen3-1.7b-full/` | 1.7B OCR CPT + 完整 SFT 流水线 |
 | 模板 | `cpt_qwen3_8b_qlora.yaml` | 自建连续文本 CPT 起点 |
 | 模板 | `sft_qwen3_8b_qlora.yaml` | 自建 messages SFT 起点 |
 | 研究 | `cpt_qwen3_8b_ocr_gt_research.yaml` | OCR GT 单卡 CPT |
