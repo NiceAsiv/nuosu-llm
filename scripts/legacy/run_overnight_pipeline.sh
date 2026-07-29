@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Historical orchestration retained for experiment reproduction.
+# New runs must pass scripts/model/recover_qwen3_base.sh first.
 set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"

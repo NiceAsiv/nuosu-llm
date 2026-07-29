@@ -70,7 +70,26 @@ def load_stage_rows(path: str | Path, stage: str) -> list[dict[str, Any]]:
     return rows
 
 
+def require_verified_base_model(config: dict[str, Any]) -> Path:
+    """Require an explicit local model recovered by the integrity workflow."""
+    base_model = Path(str(config["base_model"])).expanduser()
+    if not base_model.is_dir():
+        raise FileNotFoundError(
+            "基础模型必须是已校验的本地目录；请先运行 "
+            "scripts/model/recover_qwen3_base.sh，并用 --base-model 覆盖配置。"
+        )
+    verification_marker = base_model / "VERIFIED.sha256"
+    if not verification_marker.is_file():
+        raise FileNotFoundError(
+            f"基础模型缺少校验标记: {verification_marker}。"
+            "禁止直接训练未通过实际 SHA-256 校验的模型。"
+        )
+    return base_model
+
+
 def run_training(config: dict[str, Any]) -> None:
+    require_verified_base_model(config)
+
     import torch
     from datasets import Dataset, DatasetDict
     from peft import (
@@ -254,6 +273,7 @@ def run_training(config: dict[str, Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train a Nuosu CPT or SFT QLoRA adapter")
     parser.add_argument("--config", required=True, help="YAML 配置文件")
+    parser.add_argument("--base-model", help="已通过 VERIFIED.sha256 门禁的本地模型目录")
     parser.add_argument("--train-file")
     parser.add_argument("--eval-file")
     parser.add_argument("--output-dir")
@@ -267,6 +287,7 @@ def main() -> None:
     args = build_parser().parse_args()
     config = with_overrides(
         load_config(args.config),
+        base_model=args.base_model,
         train_file=args.train_file,
         eval_file=args.eval_file,
         output_dir=args.output_dir,

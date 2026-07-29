@@ -3,9 +3,10 @@ set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"
 PYTHON_BIN="${PYTHON_BIN:-/home/xjtuoss/nuosu-project/.venv/bin/python}"
-CONFIG_PATH="${1:?usage: benchmark_throughput.sh CONFIG [STEPS] [INIT_ADAPTER]}"
+CONFIG_PATH="${1:?usage: BASE_MODEL=/verified/model benchmark_throughput.sh CONFIG [STEPS] [INIT_ADAPTER]}"
 MAX_STEPS="${2:-30}"
 INIT_ADAPTER="${3:-}"
+BASE_MODEL="${BASE_MODEL:?set BASE_MODEL to a local directory containing VERIFIED.sha256}"
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 OUTPUT_DIR="${PROJECT_DIR}/outputs/benchmarks/${RUN_ID}"
 LOG_DIR="${PROJECT_DIR}/logs/benchmarks"
@@ -32,6 +33,7 @@ command=(
   --nproc_per_node=3
   scripts/train.py
   --config "${CONFIG_PATH}"
+  --base-model "${BASE_MODEL}"
   --output-dir "${OUTPUT_DIR}"
   --max-steps "${MAX_STEPS}"
 )

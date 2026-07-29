@@ -6,6 +6,7 @@ from nuosu_llm.training import (
     QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE,
     ensure_assistant_mask_chat_template,
     load_stage_rows,
+    require_verified_base_model,
 )
 from nuosu_llm.config import with_overrides
 
@@ -74,12 +75,14 @@ def test_preserves_compatible_chat_template():
 
 def test_runtime_overrides_can_build_benchmarks_without_mutating_source():
     config = {
+        "base_model": "Qwen/Qwen3-8B-Base",
         "output_dir": "outputs/original",
         "training": {"max_steps": -1, "resume_from_checkpoint": None},
     }
 
     updated = with_overrides(
         config,
+        base_model="/models/verified",
         output_dir="outputs/benchmark",
         init_adapter="outputs/checkpoint-300",
         max_steps=30,
@@ -87,8 +90,23 @@ def test_runtime_overrides_can_build_benchmarks_without_mutating_source():
     )
 
     assert config["output_dir"] == "outputs/original"
+    assert config["base_model"] == "Qwen/Qwen3-8B-Base"
     assert config["training"]["max_steps"] == -1
     assert updated["output_dir"] == "outputs/benchmark"
+    assert updated["base_model"] == "/models/verified"
     assert updated["init_adapter"] == "outputs/checkpoint-300"
     assert updated["training"]["max_steps"] == 30
     assert updated["training"]["resume_from_checkpoint"] == "outputs/checkpoint-200"
+
+
+def test_requires_verified_local_base_model(tmp_path):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="VERIFIED.sha256"):
+        require_verified_base_model({"base_model": str(model_dir)})
+
+    marker = model_dir / "VERIFIED.sha256"
+    marker.write_text("verified\n", encoding="utf-8")
+
+    assert require_verified_base_model({"base_model": str(model_dir)}) == model_dir

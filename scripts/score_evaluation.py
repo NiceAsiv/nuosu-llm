@@ -137,7 +137,13 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 mean([item["response_chars"] for item in items]), 3
             ),
             "yi_exact_match": round(
-                mean([float(item["yi_exact"]) for item in items if item["target_language"] == "yi"]),
+                mean(
+                    [
+                        float(item["yi_exact"])
+                        for item in items
+                        if item["target_language"] == "yi"
+                    ]
+                ),
                 6,
             ),
             "yi_reference_contained": round(
@@ -168,7 +174,8 @@ def render_markdown(label: str, metrics: dict[str, Any]) -> str:
     lines = [
         f"# Evaluation: {label}",
         "",
-        "| Split | Records | Exact | chrF2 | CER | Empty | Length stop | Replacement char | Yi exact | Tokens | sec/sample |",
+        "| Split | Records | Exact | chrF2 | CER | Empty | Length stop | "
+        "Replacement char | Yi exact | Tokens | sec/sample |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     groups = [("overall", metrics["overall"])] + list(

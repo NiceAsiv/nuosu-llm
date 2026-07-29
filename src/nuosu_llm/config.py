@@ -35,6 +35,7 @@ def validate_config(config: dict[str, Any]) -> None:
 def with_overrides(
     config: dict[str, Any],
     *,
+    base_model: str | None = None,
     train_file: str | None = None,
     eval_file: str | None = None,
     output_dir: str | None = None,
@@ -43,6 +44,8 @@ def with_overrides(
     resume_from_checkpoint: str | None = None,
 ) -> dict[str, Any]:
     updated = deepcopy(config)
+    if base_model:
+        updated["base_model"] = base_model
     if train_file:
         updated["train_file"] = train_file
     if eval_file:

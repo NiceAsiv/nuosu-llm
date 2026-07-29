@@ -1,19 +1,37 @@
-.PHONY: install test lint audit cpt sft
+.DEFAULT_GOAL := help
+
+PYTHON ?= python
+MODEL_DIR ?=
+
+.PHONY: help install test lint model-recovery-plan model-recover model-smoke profile
+
+help:
+	@echo "Nuosu LLM"
+	@echo "  make install               Install train + development dependencies"
+	@echo "  make test                  Run unit tests"
+	@echo "  make lint                  Run Ruff"
+	@echo "  make model-recovery-plan   Dry-run model quarantine and recovery"
+	@echo "  make model-recover         Execute quarantine, verified download and smoke test"
+	@echo "  make model-smoke MODEL_DIR=/abs/path"
 
 install:
-	python -m pip install -e ".[train,dev]"
+	$(PYTHON) -m pip install -e ".[train,dev]"
 
 test:
-	python -m pytest -q
+	$(PYTHON) -m pytest -q
 
 lint:
-	ruff check .
+	$(PYTHON) -m ruff check .
 
-audit:
-	python scripts/audit_tokenizers.py --help
+model-recovery-plan:
+	PYTHON_BIN="$(PYTHON)" bash scripts/model/recover_qwen3_base.sh
 
-cpt:
-	python scripts/train.py --config configs/cpt_qwen3_8b_qlora.yaml
+model-recover:
+	PYTHON_BIN="$(PYTHON)" bash scripts/model/recover_qwen3_base.sh --execute
 
-sft:
-	python scripts/train.py --config configs/sft_qwen3_8b_qlora.yaml
+model-smoke:
+	@test -n "$(MODEL_DIR)" || (echo "MODEL_DIR is required" >&2; exit 2)
+	$(PYTHON) scripts/model/smoke_test_base.py --model "$(MODEL_DIR)"
+
+profile:
+	$(PYTHON) scripts/profile_dataset.py --help

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Historical watcher retained for experiment reproduction.
+# It is not a supported entry point for a new training run.
 set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"

@@ -32,6 +32,17 @@ pytest -q
 
 ## 3. 阶段零：基线
 
+先完成模型恢复：
+
+```bash
+bash scripts/model/recover_qwen3_base.sh
+bash scripts/model/recover_qwen3_base.sh --execute
+export VERIFIED_MODEL=/absolute/path/printed/by/the/recovery/script
+```
+
+训练入口默认拒绝 Hugging Face Model ID 和缺少 `VERIFIED.sha256` 的目录。这样可以避免缓存
+链接名正确、实际大文件内容损坏时继续训练。
+
 在训练前保存以下结果：
 
 - 候选 tokenizer 的 tokens/彝文字符；
@@ -47,7 +58,9 @@ pytest -q
 CPT 使用纯文本 JSONL：
 
 ```bash
-python scripts/train.py --config configs/cpt_qwen3_8b_qlora.yaml
+python scripts/train.py \
+  --config configs/cpt_qwen3_8b_qlora.yaml \
+  --base-model "${VERIFIED_MODEL}"
 ```
 
 默认参数适合单张 24GB GPU：
@@ -82,7 +95,7 @@ python scripts/train.py --config configs/cpt_qwen3_8b_qlora.yaml
 
 ```bash
 python scripts/merge_adapter.py \
-  --base-model Qwen/Qwen3-8B-Base \
+  --base-model "${VERIFIED_MODEL}" \
   --adapter outputs/qwen3-8b-cpt-qlora \
   --output outputs/qwen3-8b-cpt-merged
 ```
@@ -103,7 +116,8 @@ base_model: outputs/qwen3-8b-cpt-merged
 
 ```bash
 python scripts/train.py \
-  --config configs/sft_qwen3_8b_qlora.yaml
+  --config configs/sft_qwen3_8b_qlora.yaml \
+  --base-model "${VERIFIED_MODEL}"
 ```
 
 SFT 使用 `assistant_only_loss: true`，只在 assistant 输出部分计算损失。若模型的 chat template 不支持 generation mask，应停止训练并检查模板，不能默默退化为全序列 loss。
@@ -119,7 +133,8 @@ tokenizer 返回 assistant mask。更换基础模型时仍应先做短基准，�
 accelerate config
 accelerate launch --num_processes 3 \
   scripts/train.py \
-  --config configs/cpt_qwen3_8b_qlora.yaml
+  --config configs/cpt_qwen3_8b_qlora.yaml \
+  --base-model "${VERIFIED_MODEL}"
 ```
 
 三张 RTX 3090 若没有 NVLink，跨卡通信走 PCIe。多卡可以提高吞吐量，但不会自动把有效 batch、学习率和保存策略调到合理值。
@@ -143,6 +158,8 @@ bash scripts/benchmark_throughput.sh \
   30 \
   outputs/previous-adapter-or-checkpoint
 ```
+
+`benchmark_throughput.sh` 同样要求先设置 `BASE_MODEL="${VERIFIED_MODEL}"`。
 
 基准至少检查：
 
@@ -209,7 +226,9 @@ result_summary:
 
 ### loss 下降但生成仍是乱码
 
-优先检查 tokenizer、解码、Unicode 规范化和数据编码；不要直接增加 epoch。
+第一步对每个 safetensors 计算实际 SHA-256，不能只看 Hugging Face 缓存链接名。然后检查
+未训练底模、tokenizer 往返编码、解码和 Unicode 规范化。底模冒烟失败时，loss 曲线无论
+多平滑都不能证明训练有效，也不要直接增加 epoch。
 
 ### 模型只会翻译
 
