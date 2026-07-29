@@ -14,3 +14,14 @@ bash scripts/pipeline/run_research_pipeline.sh /absolute/verified/model
 
 任一阶段失败都会停止。流水线不会运行保留测试集，也不会发布模型。每阶段日志写入
 `artifacts/pipeline/<UTC timestamp>/`。
+
+服务器上已有后台恢复任务时，可条件等待：
+
+```bash
+bash scripts/pipeline/wait_for_recovery_then_train.sh \
+  RECOVERY_PID \
+  /absolute/verified/model \
+  /absolute/recovery.log
+```
+
+只有恢复日志明确包含 `recovery passed` 且校验标记存在时才会启动训练。
