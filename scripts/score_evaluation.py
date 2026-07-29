@@ -19,7 +19,9 @@ def compact_text(text: str) -> str:
     return _SPACE_AND_PUNCTUATION.sub("", normalized)
 
 
-def infer_target_language(prompt: str) -> str:
+def infer_target_language(prompt: str, reference: str = "") -> str:
+    if any(is_yi_syllable(char) for char in normalize_text(reference)):
+        return "yi"
     normalized = normalize_text(prompt)
     if "中文" in normalized or "汉语" in normalized:
         return "zh"
@@ -90,7 +92,7 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         compact_reference = compact_text(reference)
         compact_response = compact_text(response)
         prompt = str(row.get("messages", [{}])[-1].get("content", ""))
-        target_language = infer_target_language(prompt)
+        target_language = infer_target_language(prompt, reference)
         reference_yi = yi_only(reference)
         response_yi = yi_only(response)
         scored.append(

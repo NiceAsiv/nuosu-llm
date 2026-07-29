@@ -35,6 +35,13 @@ def test_normalization_and_basic_metrics():
 def test_target_language_inference():
     assert infer_target_language("这句话的中文意思是什么？") == "zh"
     assert infer_target_language("如何用彝文表达这句话？") == "yi"
+    assert (
+        infer_target_language(
+            "请把下面的汉语翻译成凉山规范彝文：测试",
+            "ꀀꁌ",
+        )
+        == "yi"
+    )
     assert infer_target_language("回答问题") == "unknown"
 
 
