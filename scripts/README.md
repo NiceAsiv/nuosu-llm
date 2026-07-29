@@ -7,6 +7,7 @@
 | 模型下载与校验 | 见 `scripts/model/README.md` |
 | 64 条过拟合门禁 | `bash scripts/gates/run_sft_overfit_64.sh /verified/model` |
 | 数据画像 | `python scripts/profile_dataset.py --config ...` |
+| 单卡交互试用 | `nuosu-chat --model /verified/model --adapter /adapter` |
 | 训练 | `python scripts/train.py --config ... --base-model ...` |
 | 多卡训练 | `torchrun --nproc_per_node=N scripts/train.py ...` |
 | 多卡评测 | `torchrun --nproc_per_node=N scripts/evaluate_prompts.py ...` |

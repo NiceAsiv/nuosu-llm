@@ -121,6 +121,30 @@ torchrun --standalone --nproc_per_node=NUM_GPUS \
 三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
 [`experiments/xjtu-3gpu/`](experiments/xjtu-3gpu/)，仅用于复现实验。
 
+### 5. 亲自试用模型
+
+安装项目后，使用一张 GPU 启动通用交互命令：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 nuosu-chat \
+  --model /absolute/path/to/verified-model \
+  --adapter outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
+  --tokenizer outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast
+```
+
+输入 `/clear` 清空多轮上下文，输入 `/quit` 退出。显存不足时可增加 `--load-in-4bit`。
+单次测试使用：
+
+```bash
+nuosu-chat \
+  --model /absolute/path/to/verified-model \
+  --adapter /absolute/path/to/adapter \
+  --prompt '请将“你好”翻译成凉山规范彝文。'
+```
+
+不懂彝文的测试者只能检查空输出、乱码、重复、截断、速度和任务格式，不能据此判断翻译
+准确性。语义和规范性必须使用隐藏 reference 或母语者盲评。
+
 ## 标准工作流
 
 ```text
@@ -187,6 +211,10 @@ tests/                # 单元测试
 
 ## 当前实验记录
 
+已通过底模校验、训练和正式评测的实验：
+
+- [`evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md)
+
 损坏底模实验的结果只作为事故记录：
 
 - [`evaluation/reports/2026-07-29-qwen3-8b-nuosu.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu.md)
@@ -225,3 +253,15 @@ See [`docs/README.md`](docs/README.md) for the documentation map and
 [`scripts/README.md`](scripts/README.md) for the command catalog. Hardware-specific
 runs are archived under [`experiments/`](experiments/), while one-off incident
 recovery tools live under [`patches/`](patches/).
+
+To try a trained adapter interactively on one GPU:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 nuosu-chat \
+  --model /absolute/path/to/verified-model \
+  --adapter /absolute/path/to/adapter
+```
+
+Use `/clear` to reset the conversation and `/quit` to exit. Non-Nuosu speakers
+can test runtime behavior, formatting, repetition, and truncation, but semantic
+and orthographic quality requires hidden references or blind native-speaker review.
