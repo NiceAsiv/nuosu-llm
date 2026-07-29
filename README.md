@@ -1,6 +1,7 @@
 # Nuosu LLM
 
 [![CI](https://github.com/NiceAsiv/nuosu-llm/actions/workflows/ci.yml/badge.svg)](https://github.com/NiceAsiv/nuosu-llm/actions/workflows/ci.yml)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face-yellow)](https://huggingface.co/NiceAsiv)
 
 面向凉山规范彝文（诺苏语）的可复现训练与评测工具。
 

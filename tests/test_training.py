@@ -2,13 +2,13 @@ import json
 
 import pytest
 
+from nuosu_llm.config import with_overrides
 from nuosu_llm.training import (
     QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE,
     ensure_assistant_mask_chat_template,
     load_stage_rows,
     require_verified_base_model,
 )
-from nuosu_llm.config import with_overrides
 
 
 class FakeTokenizer:

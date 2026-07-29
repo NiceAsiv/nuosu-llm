@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.evaluate_prompts import generation_stop_token_ids, generated_token_count
+from scripts.evaluate_prompts import generated_token_count, generation_stop_token_ids
 from scripts.score_evaluation import (
     character_error_rate,
     chrf2,

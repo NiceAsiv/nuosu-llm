@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 PROMPTS = (
     {"id": "zh-capital", "prompt": "中国的首都是", "expected": "北京"},
     {"id": "en-capital", "prompt": "The capital of France is", "expected": "Paris"},

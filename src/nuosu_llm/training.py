@@ -8,7 +8,6 @@ from typing import Any
 
 from .config import load_config, with_overrides
 
-
 QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE = (
     "{% for message in messages %}"
     "{{ '<|im_start|>' + message['role'] + '\\n' }}"
