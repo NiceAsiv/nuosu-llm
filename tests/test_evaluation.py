@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from scripts.evaluate_prompts import generated_token_count, generation_stop_token_ids
+import pytest
+
+from scripts.evaluate_prompts import (
+    generated_token_count,
+    generation_stop_token_ids,
+    project_evaluation_record,
+)
 from scripts.score_evaluation import (
     character_error_rate,
     chrf2,
@@ -23,6 +29,31 @@ def test_generation_stops_at_all_qwen_end_markers():
     stop_ids = generation_stop_token_ids(Tokenizer())
     assert stop_ids == {151643, 151645}
     assert generated_token_count([7, 8, 151645, 9], stop_ids) == 3
+
+
+def test_sft_validation_is_projected_without_answer_leakage():
+    projected = project_evaluation_record(
+        {
+            "id": "validation-1",
+            "messages": [
+                {"role": "user", "content": "翻译这句话"},
+                {"role": "assistant", "content": "参考答案"},
+            ],
+        }
+    )
+
+    assert projected["messages"] == [{"role": "user", "content": "翻译这句话"}]
+    assert projected["reference"] == "参考答案"
+
+
+def test_evaluation_projection_requires_reference():
+    with pytest.raises(ValueError, match="reference 为空"):
+        project_evaluation_record(
+            {
+                "id": "invalid-1",
+                "messages": [{"role": "user", "content": "没有答案"}],
+            }
+        )
 
 
 def test_normalization_and_basic_metrics():

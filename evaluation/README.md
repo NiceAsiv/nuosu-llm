@@ -15,7 +15,30 @@ The held-out file contains 11,171 user prompts and references. References are
 used only by the offline scorer and are never included in model inputs. Use
 train/validation for training and checkpoint selection.
 
-## 三卡 LoRA 评测 / Three-GPU LoRA evaluation
+## Validation 生成门禁 / Validation generation gate
+
+不要用保留测试集做冒烟。评测器会把 SFT validation 中最后一个 assistant 安全地移出提示，
+作为离线 reference：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 \
+torchrun --standalone --nproc_per_node=3 \
+  scripts/evaluate_prompts.py \
+  --model /absolute/path/to/verified-model \
+  --adapter outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
+  --tokenizer outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
+  --input ../nuosu-corpus/data/processed/bootstrap_nuosu_bench/validation.jsonl \
+  --output evaluation/results/qwen3-8b-nuosu-validation-192.jsonl \
+  --batch-size 16 \
+  --max-input-tokens 512 \
+  --max-new-tokens 96 \
+  --limit 192
+```
+
+门禁至少要求：记录数正确、无空输出、无替换字符、没有大面积长度截断，并人工抽查输出
+语言和停止位置。通过后冻结解码参数，再运行保留测试集。
+
+## 多卡 LoRA 正式评测 / Multi-GPU LoRA evaluation
 
 下面的命令采用确定性 greedy decoding。每个进程只占用一张 GPU，最后由 rank 0 按原始
 数据顺序合并结果。评测器同时将 Qwen 的 `<|endoftext|>` 和 ChatML 的 `<|im_end|>` 作为
@@ -23,9 +46,9 @@ train/validation for training and checkpoint selection.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2 \
-python -m torch.distributed.run --standalone --nproc_per_node=3 \
+torchrun --standalone --nproc_per_node=3 \
   scripts/evaluate_prompts.py \
-  --model Qwen/Qwen3-8B-Base \
+  --model /absolute/path/to/verified-model \
   --adapter outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
   --tokenizer outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
   --input ../nuosu-corpus/data/processed/bootstrap_nuosu_bench/research_test_eval.jsonl \
@@ -35,9 +58,8 @@ python -m torch.distributed.run --standalone --nproc_per_node=3 \
   --max-new-tokens 96
 ```
 
-如任务中断，可保留各 rank 的 `.rankN.jsonl` 文件并在相同参数后增加 `--resume`。
-先用 `--limit 192` 进行冒烟测试，确认输出语言、EOS 和加载的 adapter 正确，再消耗完整
-测试集。
+如任务中断，可保留各 rank 的 `.rankN.jsonl` 文件并在相同参数后增加 `--resume`。正式
+测试前必须使用上面的 validation 门禁，不能用 `--limit 192` 提前查看保留测试结果。
 
 The evaluator performs deterministic batched generation, shards examples
 across one process per GPU, and merges rank outputs in source order. Add

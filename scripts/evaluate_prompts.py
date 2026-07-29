@@ -24,13 +24,42 @@ def part_path(output_path: Path, rank: int) -> Path:
     return output_path.with_name(f"{output_path.name}.rank{rank}.jsonl")
 
 
+def project_evaluation_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Strip a final SFT assistant answer from the prompt and use it as reference."""
+    projected = dict(record)
+    messages = list(projected.get("messages") or [])
+    if not messages:
+        raise ValueError(f"{projected.get('id', '<unknown>')}: messages 为空")
+
+    if messages[-1].get("role") == "assistant":
+        answer = str(messages[-1].get("content") or "").strip()
+        if not answer:
+            raise ValueError(f"{projected.get('id', '<unknown>')}: assistant reference 为空")
+        existing_reference = str(projected.get("reference") or "").strip()
+        if existing_reference and existing_reference != answer:
+            raise ValueError(
+                f"{projected.get('id', '<unknown>')}: reference 与最后一个 assistant 不一致"
+            )
+        projected["reference"] = existing_reference or answer
+        messages = messages[:-1]
+
+    if not messages or messages[-1].get("role") == "assistant":
+        raise ValueError(
+            f"{projected.get('id', '<unknown>')}: 评测提示不能以 assistant 消息结束"
+        )
+    if not str(projected.get("reference") or "").strip():
+        raise ValueError(f"{projected.get('id', '<unknown>')}: reference 为空")
+    projected["messages"] = messages
+    return projected
+
+
 def load_records(path: Path, limit: int | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8-sig") as handle:
         for source_index, line in enumerate(handle):
             if not line.strip():
                 continue
-            record = json.loads(line)
+            record = project_evaluation_record(json.loads(line))
             record["_source_index"] = source_index
             rows.append(record)
             if limit is not None and len(rows) >= limit:
