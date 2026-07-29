@@ -43,6 +43,13 @@ The evaluator performs deterministic batched generation, shards examples
 across one process per GPU, and merges rank outputs in source order. Add
 `--resume` after an interruption, or use `--limit 192` for a smoke test.
 
+QLoRA 数值诊断时可加 `--load-in-4bit`，使用与训练相同的 NF4 base；未微调的 Base
+completion 对照可用 `--prompt-format raw`。二者是诊断开关，正式 adapter 结果仍应固定并
+公开一套推理参数。
+
+若要评估采样解码，可增加 `--do-sample --temperature 0.7 --top-p 0.9 --seed 42`。
+不要把多个解码设置中最高的 test 分数当作单次正式结果；解码参数应在 validation 上确定。
+
 ## 自动评分 / Automatic scoring
 
 ```bash

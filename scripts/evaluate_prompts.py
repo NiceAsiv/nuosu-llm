@@ -89,17 +89,39 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--do-sample", action="store_true")
+    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--top-p", type=float, default=0.9)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--prompt-format",
+        choices=("chat", "raw"),
+        default="chat",
+        help="Use the saved chat template or the final user content as a raw completion prompt",
+    )
+    parser.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        help="Load the base model with the same NF4 quantization used by QLoRA training",
+    )
     return parser
 
 
 def main() -> None:
     import torch
     from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        BitsAndBytesConfig,
+    )
 
     args = build_parser().parse_args()
     world_size, rank, local_rank = distributed_context(torch)
     started_at = time.perf_counter()
+    torch.manual_seed(args.seed + rank)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed + rank)
 
     tokenizer_source = args.tokenizer or args.adapter or args.model
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, use_fast=True)
@@ -107,12 +129,19 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
 
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="sdpa",
-        device_map={"": local_rank},
-    )
+    model_kwargs = {
+        "dtype": torch.bfloat16,
+        "attn_implementation": "sdpa",
+        "device_map": {"": local_rank},
+    }
+    if args.load_in_4bit:
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+    model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
     if args.adapter:
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
@@ -140,14 +169,19 @@ def main() -> None:
     with rank_output.open(mode, encoding="utf-8", newline="\n") as target:
         for offset in range(0, len(pending), args.batch_size):
             batch = pending[offset : offset + args.batch_size]
-            prompts = [
-                tokenizer.apply_chat_template(
-                    record["messages"],
-                    add_generation_prompt=True,
-                    tokenize=False,
-                )
-                for record in batch
-            ]
+            if args.prompt_format == "chat":
+                prompts = [
+                    tokenizer.apply_chat_template(
+                        record["messages"],
+                        add_generation_prompt=True,
+                        tokenize=False,
+                    )
+                    for record in batch
+                ]
+            else:
+                prompts = [
+                    str(record["messages"][-1].get("content", "")) for record in batch
+                ]
             inputs = tokenizer(
                 prompts,
                 padding=True,
@@ -156,13 +190,21 @@ def main() -> None:
                 return_tensors="pt",
             ).to(model.device)
             batch_started = time.perf_counter()
+            generation_kwargs = {
+                "max_new_tokens": args.max_new_tokens,
+                "do_sample": args.do_sample,
+                "pad_token_id": tokenizer.pad_token_id,
+                "eos_token_id": generation_eos_token_id,
+            }
+            if args.do_sample:
+                generation_kwargs.update(
+                    temperature=args.temperature,
+                    top_p=args.top_p,
+                )
             with torch.inference_mode():
                 generated = model.generate(
                     **inputs,
-                    max_new_tokens=args.max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=generation_eos_token_id,
+                    **generation_kwargs,
                 )
             elapsed = time.perf_counter() - batch_started
             prompt_width = inputs["input_ids"].shape[-1]
@@ -235,8 +277,13 @@ def main() -> None:
             "batch_size_per_gpu": args.batch_size,
             "max_input_tokens": args.max_input_tokens,
             "max_new_tokens": args.max_new_tokens,
-            "do_sample": False,
+            "do_sample": args.do_sample,
+            "temperature": args.temperature if args.do_sample else None,
+            "top_p": args.top_p if args.do_sample else None,
+            "seed": args.seed,
             "dtype": "bfloat16",
+            "load_in_4bit": args.load_in_4bit,
+            "prompt_format": args.prompt_format,
             "eos_token_ids": generation_eos_token_id,
         }
         output_path.with_suffix(".manifest.json").write_text(

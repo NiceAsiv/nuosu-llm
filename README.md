@@ -259,6 +259,9 @@ python scripts/score_evaluation.py \
 多 GPU、断点续跑、指标解释和人工盲评要求见
 [`evaluation/README.md`](evaluation/README.md)。
 
+当前实验 checkpoint 的完整结果与下一轮门禁方案见
+[`evaluation/reports/2026-07-29-qwen3-8b-nuosu.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu.md)。
+
 完整 `evaluation/nuosu_bench/test.jsonl` 主要用于比较未使用 NuosuBench 训练的基础模型。研究适配
 模型以 `research_test_eval.jsonl` 为最终保留测试集。训练前可运行精确重叠检查：
 
