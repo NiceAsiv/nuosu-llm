@@ -10,3 +10,7 @@
 
 门禁用于证明训练、assistant mask、adapter 加载、EOS 和解码链路能够工作，不代表泛化能力。
 门禁失败时禁止启动完整训练。
+
+Qwen3 Base 的 assistant 目标使用其原生 `<|endoftext|>` 作为 EOS；`<|im_end|>` 仅用于
+ChatML 角色边界。不要直接照搬 Qwen3 Instruct 的 assistant 终止方式，否则可能出现
+loss 正常下降、答案前缀正确、但生成持续到长度上限的假收敛。

@@ -12,6 +12,11 @@ def main() -> None:
     parser.add_argument("--min-chrf2", type=float, default=70.0)
     parser.add_argument("--max-replacement-rate", type=float, default=0.01)
     parser.add_argument("--max-length-stop-rate", type=float, default=0.05)
+    parser.add_argument(
+        "--result-output",
+        type=Path,
+        help="Optional JSON path for a machine-readable pass/fail report",
+    )
     args = parser.parse_args()
 
     payload = json.loads(args.metrics.read_text(encoding="utf-8"))
@@ -33,6 +38,12 @@ def main() -> None:
         "checks": checks,
         "metrics": metrics,
     }
+    if args.result_output:
+        args.result_output.parent.mkdir(parents=True, exist_ok=True)
+        args.result_output.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result["passed"]:
         raise SystemExit(1)

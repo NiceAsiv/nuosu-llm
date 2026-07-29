@@ -13,7 +13,7 @@ QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE = (
     "{% for message in messages %}"
     "{{ '<|im_start|>' + message['role'] + '\\n' }}"
     "{% if message['role'] == 'assistant' %}"
-    "{% generation %}{{ message['content'] + '<|im_end|>\\n' }}{% endgeneration %}"
+    "{% generation %}{{ message['content'] + '<|endoftext|>' }}{% endgeneration %}"
     "{% else %}{{ message['content'] + '<|im_end|>\\n' }}{% endif %}"
     "{% endfor %}"
     "{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}"

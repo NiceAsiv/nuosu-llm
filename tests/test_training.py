@@ -63,6 +63,11 @@ def test_installs_generation_spans_for_assistant_only_loss():
     assert tokenizer.chat_template == QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE
     assert "{% generation %}" in tokenizer.chat_template
     assert "{% endgeneration %}" in tokenizer.chat_template
+    generation_span = tokenizer.chat_template.split("{% generation %}", 1)[1].split(
+        "{% endgeneration %}", 1
+    )[0]
+    assert "<|endoftext|>" in generation_span
+    assert "<|im_end|>" not in generation_span
 
 
 def test_preserves_compatible_chat_template():

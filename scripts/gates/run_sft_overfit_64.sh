@@ -13,6 +13,7 @@ TRAIN_FILE="${GATE_DIR}/train.jsonl"
 EVAL_FILE="${GATE_DIR}/eval.jsonl"
 GEN_FILE="${GATE_DIR}/generations.jsonl"
 METRICS_FILE="${GATE_DIR}/metrics.json"
+CHECK_FILE="${GATE_DIR}/gate-check.json"
 LOG_FILE="${GATE_DIR}/training.log"
 
 [[ -f "${MODEL_DIR}/VERIFIED.sha256" ]] || {
@@ -82,8 +83,13 @@ env \
   --output-json "${METRICS_FILE}" \
   --output-markdown "${GATE_DIR}/metrics.md"
 
-"${PYTHON_BIN}" scripts/gates/check_overfit_metrics.py \
-  --metrics "${METRICS_FILE}"
+if ! "${PYTHON_BIN}" scripts/gates/check_overfit_metrics.py \
+  --metrics "${METRICS_FILE}" \
+  --result-output "${CHECK_FILE}"; then
+  printf '%s\n' "${MODEL_DIR}" > "${GATE_DIR}/FAILED"
+  echo "SFT overfit gate failed: ${CHECK_FILE}" >&2
+  exit 1
+fi
 
 printf '%s\n' "${MODEL_DIR}" > "${GATE_DIR}/PASSED"
 echo "SFT overfit gate passed: ${GATE_DIR}"
