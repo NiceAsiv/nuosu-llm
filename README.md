@@ -243,10 +243,21 @@ python scripts/fetch_nuosu_bench.py \
   --revision 0709c1fd4f6eaabd4b058ea419027ccc42731dee
 
 python scripts/evaluate_prompts.py \
-  --model outputs/qwen3-8b-nuosu-merged \
+  --model Qwen/Qwen3-8B-Base \
+  --adapter outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
+  --tokenizer outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
   --input ../nuosu-corpus/data/processed/bootstrap_nuosu_bench/research_test_eval.jsonl \
   --output evaluation/results/qwen3-8b-nuosu-research-test.jsonl
+
+python scripts/score_evaluation.py \
+  --input evaluation/results/qwen3-8b-nuosu-research-test.jsonl \
+  --label qwen3-8b-nuosu-final \
+  --output-json evaluation/results/qwen3-8b-nuosu-research-test.metrics.json \
+  --output-markdown evaluation/results/qwen3-8b-nuosu-research-test.metrics.md
 ```
+
+多 GPU、断点续跑、指标解释和人工盲评要求见
+[`evaluation/README.md`](evaluation/README.md)。
 
 完整 `evaluation/nuosu_bench/test.jsonl` 主要用于比较未使用 NuosuBench 训练的基础模型。研究适配
 模型以 `research_test_eval.jsonl` 为最终保留测试集。训练前可运行精确重叠检查：
