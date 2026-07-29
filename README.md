@@ -142,6 +142,8 @@ nuosu-chat \
   --prompt '请将“你好”翻译成凉山规范彝文。'
 ```
 
+<img width="972" height="465" alt="image" src="https://github.com/user-attachments/assets/029221e3-7130-43a3-8f0d-4bc062e5d391" />
+
 不懂彝文的测试者只能检查空输出、乱码、重复、截断、速度和任务格式，不能据此判断翻译
 准确性。语义和规范性必须使用隐藏 reference 或母语者盲评。
 
@@ -220,6 +222,9 @@ tests/                # 单元测试
 - [`evaluation/reports/2026-07-29-qwen3-8b-nuosu.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu.md)
 
 不要上传该轮 adapter，也不要引用其分数作为模型能力。
+
+
+
 
 ## Development
 
