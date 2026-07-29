@@ -59,19 +59,19 @@ fi
 
 run_stage \
   cpt-ocr-gt \
-  experiments/xjtu-3gpu/configs/cpt_qwen3_8b_ocr_gt_research_3gpu.yaml \
+  experiments/three-gpu-24gb/configs/cpt_qwen3_8b_ocr_gt_research_3gpu.yaml \
   outputs/qwen3-8b-nuosu-ocr-gt-cpt-3gpu-stable
 run_stage \
   sft-dictionary \
-  experiments/xjtu-3gpu/configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  experiments/three-gpu-24gb/configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
   outputs/qwen3-8b-nuosu-dictionary-sft-3gpu-fast
 run_stage \
   sft-nuosubench-short \
-  experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml \
+  experiments/three-gpu-24gb/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml \
   outputs/qwen3-8b-nuosu-nuosubench-short-sft-3gpu-fast
 run_stage \
   sft-nuosubench-long \
-  experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml \
+  experiments/three-gpu-24gb/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml \
   outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast
 
 echo "pipeline completed; run validation generation before any held-out test"

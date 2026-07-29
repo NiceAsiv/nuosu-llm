@@ -72,7 +72,7 @@ rank 与 CUDA 设备，并在该服务器实验中固定 loopback、禁用不存
 恢复训练成功越过屏障并由三张卡共同训练。
 
 loopback 和 `NCCL_IB_DISABLE=1` 是这台服务器的实验参数，不是项目默认值。因此它们只
-保留在 `experiments/xjtu-3gpu/` 和对应恢复补丁中。显式 rank/device 绑定属于通用正确性
+保留在 `experiments/three-gpu-24gb/` 和对应恢复补丁中。显式 rank/device 绑定属于通用正确性
 保护，保留在核心训练代码。
 
 ## 事故四：脚本和配置开始掩盖主入口
@@ -89,7 +89,7 @@ loopback 和 `NCCL_IB_DISABLE=1` 是这台服务器的实验参数，不是项�
 ```text
 configs/                 通用单卡起点和门禁配置
 scripts/                 稳定、可测试的训练与评测工具
-experiments/xjtu-3gpu/   特定三卡服务器的配置和流水线
+experiments/three-gpu-24gb/   特定三卡服务器的配置和流水线
 patches/2026-07-29/      一次性事故恢复脚本
 evaluation/reports/      评测结果和已作废实验记录
 ```

@@ -24,4 +24,4 @@ torchrun --standalone --nproc_per_node=NUM_GPUS \
 
 当前归档：
 
-- [`xjtu-3gpu/`](xjtu-3gpu/)：三张 24GB RTX 3090 的 2026-07-29 研究运行。
+- [`three-gpu-24gb/`](three-gpu-24gb/)：三张 24GB GPU 的 2026-07-29 研究运行。

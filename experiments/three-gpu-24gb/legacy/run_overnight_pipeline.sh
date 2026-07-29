@@ -3,8 +3,8 @@
 # Historical server automation. Do not use as a general training entry point.
 set -Eeuo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"
-PYTHON_BIN="${PYTHON_BIN:-/home/xjtuoss/nuosu-project/.venv/bin/python}"
+PROJECT_DIR="${PROJECT_DIR:-.}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 WAIT_PID="${1:-}"
 DICTIONARY_INIT_ADAPTER="${DICTIONARY_INIT_ADAPTER:-}"
 LOG_DIR="${PROJECT_DIR}/logs"
@@ -60,15 +60,15 @@ run_stage() {
 
 run_stage \
   "sft_dictionary_3gpu" \
-  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml" \
+  "experiments/three-gpu-24gb/configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml" \
   "${DICTIONARY_INIT_ADAPTER}"
 
 run_stage \
   "sft_nuosubench_short_3gpu" \
-  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml"
+  "experiments/three-gpu-24gb/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml"
 
 run_stage \
   "sft_nuosubench_long_3gpu" \
-  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
+  "experiments/three-gpu-24gb/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
 
 echo "$(timestamp) overnight pipeline completed"

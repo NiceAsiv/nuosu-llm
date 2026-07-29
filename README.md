@@ -119,7 +119,7 @@ torchrun --standalone --nproc_per_node=NUM_GPUS \
 ```
 
 三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
-[`experiments/xjtu-3gpu/`](experiments/xjtu-3gpu/)，仅用于复现实验。
+[`experiments/three-gpu-24gb/`](experiments/three-gpu-24gb/)，仅用于复现实验。
 
 ### 5. 亲自试用模型
 

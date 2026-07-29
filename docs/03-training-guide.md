@@ -187,7 +187,7 @@ python scripts/bucket_sft_by_length.py \
 
 短阶段和长阶段必须沿用同一 adapter；不能把两个阶段各自从基础模型开始后再尝试合并。
 本项目三张 RTX 3090 的确切参数和分阶段流水线只在
-[`../experiments/xjtu-3gpu/`](../experiments/xjtu-3gpu/) 中归档。
+[`../experiments/three-gpu-24gb/`](../experiments/three-gpu-24gb/) 中归档。
 
 ## 8. 断点恢复
 

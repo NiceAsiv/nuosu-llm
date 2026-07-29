@@ -1,4 +1,4 @@
-# XJTU three-GPU experiment / 西交三卡实验
+# Three-GPU 24GB experiment / 三卡 24GB 实验
 
 这是特定服务器实验的可复现快照，不是所有用户都需要三张 GPU。
 
@@ -18,7 +18,7 @@
 
 ```bash
 PYTHON_BIN=/absolute/path/to/python \
-bash experiments/xjtu-3gpu/run_pipeline.sh /absolute/path/to/verified-model
+bash experiments/three-gpu-24gb/run_pipeline.sh /absolute/path/to/verified-model
 ```
 
 流水线依次执行：

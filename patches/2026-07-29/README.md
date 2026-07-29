@@ -5,7 +5,7 @@
 | 文件 | 用途 |
 |---|---|
 | `recover_corrupt_qwen3_base.sh` | 隔离损坏缓存及其派生 adapter，重新下载固定 revision，校验 SHA 并做底模冒烟 |
-| `wait_for_recovery_then_train.sh` | 等待上述恢复完成，再启动 XJTU 三卡实验 |
+| `wait_for_recovery_then_train.sh` | 等待上述恢复完成，再启动三卡实验 |
 | `resume_after_dictionary.sh` | OCR CPT 和词典 SFT 已完成时，只恢复短样本和长样本阶段 |
 
 它们包含这次运行的模型 revision、输出命名、三卡环境和阶段依赖。新用户不需要运行这些

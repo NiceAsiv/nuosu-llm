@@ -15,7 +15,7 @@
 | 研究 | `sft_qwen3_8b_bootstrap.yaml` | NuosuBench 单卡 SFT |
 
 三卡和 `fast` 配置不是跨机器默认值，已移到
-[`../experiments/xjtu-3gpu/configs/`](../experiments/xjtu-3gpu/configs/)。换 GPU、PyTorch、
+[`../experiments/three-gpu-24gb/configs/`](../experiments/three-gpu-24gb/configs/)。换 GPU、PyTorch、
 attention backend 或数据长度分布后必须重新运行 `profile_dataset.py` 和
 `benchmark_throughput.sh`。
 

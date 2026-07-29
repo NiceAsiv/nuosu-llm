@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"
-PYTHON_BIN="${PYTHON_BIN:-/home/xjtuoss/nuosu-project/.venv/bin/python}"
+PROJECT_DIR="${PROJECT_DIR:-.}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 CONFIG_PATH="${1:?usage: BASE_MODEL=/verified/model benchmark_throughput.sh CONFIG [STEPS] [INIT_ADAPTER]}"
 MAX_STEPS="${2:-30}"
 INIT_ADAPTER="${3:-}"
