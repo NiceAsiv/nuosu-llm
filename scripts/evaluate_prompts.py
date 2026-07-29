@@ -16,7 +16,10 @@ def distributed_context(torch: Any) -> tuple[int, int, int]:
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     if world_size > 1:
         torch.cuda.set_device(local_rank)
-        torch.distributed.init_process_group(backend="nccl")
+        torch.distributed.init_process_group(
+            backend="nccl",
+            device_id=torch.device("cuda", local_rank),
+        )
     return world_size, rank, local_rank
 
 

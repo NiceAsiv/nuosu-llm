@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from scripts.evaluate_prompts import (
+    distributed_context,
     generated_token_count,
     generation_stop_token_ids,
     project_evaluation_record,
@@ -29,6 +30,38 @@ def test_generation_stops_at_all_qwen_end_markers():
     stop_ids = generation_stop_token_ids(Tokenizer())
     assert stop_ids == {151643, 151645}
     assert generated_token_count([7, 8, 151645, 9], stop_ids) == 3
+
+
+def test_distributed_evaluation_binds_rank_to_device(monkeypatch):
+    calls: dict[str, object] = {}
+
+    class Cuda:
+        @staticmethod
+        def set_device(local_rank: int) -> None:
+            calls["local_rank"] = local_rank
+
+    class Distributed:
+        @staticmethod
+        def init_process_group(**kwargs) -> None:
+            calls["init"] = kwargs
+
+    class Torch:
+        cuda = Cuda()
+        distributed = Distributed()
+
+        @staticmethod
+        def device(device_type: str, index: int) -> tuple[str, int]:
+            return device_type, index
+
+    monkeypatch.setenv("WORLD_SIZE", "3")
+    monkeypatch.setenv("RANK", "2")
+    monkeypatch.setenv("LOCAL_RANK", "2")
+
+    assert distributed_context(Torch()) == (3, 2, 2)
+    assert calls == {
+        "local_rank": 2,
+        "init": {"backend": "nccl", "device_id": ("cuda", 2)},
+    }
 
 
 def test_sft_validation_is_projected_without_answer_leakage():
