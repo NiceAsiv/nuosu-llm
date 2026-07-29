@@ -32,16 +32,19 @@ pytest -q
 
 ## 3. 阶段零：基线
 
-先完成模型恢复：
+先按 [`../scripts/model/README.md`](../scripts/model/README.md) 下载固定 revision、校验每个
+权重分片，并完成未训练底模冒烟：
 
 ```bash
-bash scripts/model/recover_qwen3_base.sh
-bash scripts/model/recover_qwen3_base.sh --execute
-export VERIFIED_MODEL=/absolute/path/printed/by/the/recovery/script
+export VERIFIED_MODEL=/absolute/path/to/verified/model
+test -f "${VERIFIED_MODEL}/VERIFIED.sha256"
 ```
 
 训练入口默认拒绝 Hugging Face Model ID 和缺少 `VERIFIED.sha256` 的目录。这样可以避免缓存
 链接名正确、实际大文件内容损坏时继续训练。
+
+已经发生坏缓存事故时，再使用 [`../patches/`](../patches/) 中与事故日期对应的补丁。补丁
+不是正常训练的前置步骤。
 
 在训练前保存以下结果：
 
@@ -130,14 +133,15 @@ tokenizer 返回 assistant mask。更换基础模型时仍应先做短基准，�
 8B QLoRA 可在单张 24GB RTX 3090 上以 2K 上下文、micro batch 1 起步。单卡通常最稳定；只有吞吐量或更大模型确实需要时再使用多卡：
 
 ```bash
-accelerate config
-accelerate launch --num_processes 3 \
+NUM_GPUS=2
+torchrun --standalone --nproc_per_node="${NUM_GPUS}" \
   scripts/train.py \
   --config configs/cpt_qwen3_8b_qlora.yaml \
   --base-model "${VERIFIED_MODEL}"
 ```
 
-三张 RTX 3090 若没有 NVLink，跨卡通信走 PCIe。多卡可以提高吞吐量，但不会自动把有效 batch、学习率和保存策略调到合理值。
+`NUM_GPUS` 可以是 2、3、4 或当前机器实际可用的数量。多卡可以提高吞吐量，但不会自动
+把有效 batch、学习率和保存策略调到合理值。
 
 数据并行的有效全局 batch 为：
 
@@ -150,11 +154,11 @@ world_size × per_device_train_batch_size × gradient_accumulation_steps
 
 ```bash
 python scripts/profile_dataset.py \
-  --config configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  --config configs/sft_qwen3_8b_dictionary_research.yaml \
   --batch-size 32
 
 bash scripts/benchmark_throughput.sh \
-  configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  configs/sft_qwen3_8b_dictionary_research.yaml \
   30 \
   outputs/previous-adapter-or-checkpoint
 ```
@@ -176,12 +180,14 @@ bash scripts/benchmark_throughput.sh \
 
 ```bash
 python scripts/bucket_sft_by_length.py \
-  --config configs/sft_qwen3_8b_nuosubench_research_3gpu.yaml \
+  --config configs/sft_qwen3_8b_bootstrap.yaml \
   --threshold 512 \
   --output-dir ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets
 ```
 
 短阶段和长阶段必须沿用同一 adapter；不能把两个阶段各自从基础模型开始后再尝试合并。
+本项目三张 RTX 3090 的确切参数和分阶段流水线只在
+[`../experiments/xjtu-3gpu/`](../experiments/xjtu-3gpu/) 中归档。
 
 ## 8. 断点恢复
 

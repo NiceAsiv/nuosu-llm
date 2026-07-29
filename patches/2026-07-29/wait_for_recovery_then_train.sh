@@ -22,4 +22,4 @@ if [[ ! -f "${MODEL_DIR}/VERIFIED.sha256" ]]; then
 fi
 
 echo "recovery passed; starting gated research pipeline"
-exec bash "${PROJECT_DIR}/scripts/pipeline/run_research_pipeline.sh" "${MODEL_DIR}"
+exec bash "${PROJECT_DIR}/experiments/xjtu-3gpu/run_pipeline.sh" "${MODEL_DIR}"

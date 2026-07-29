@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Historical orchestration retained for experiment reproduction.
-# New runs must pass scripts/model/recover_qwen3_base.sh first.
+# Historical server automation. Do not use as a general training entry point.
 set -Eeuo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"
@@ -60,15 +60,15 @@ run_stage() {
 
 run_stage \
   "sft_dictionary_3gpu" \
-  "configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml" \
+  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml" \
   "${DICTIONARY_INIT_ADAPTER}"
 
 run_stage \
   "sft_nuosubench_short_3gpu" \
-  "configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml"
+  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml"
 
 run_stage \
   "sft_nuosubench_long_3gpu" \
-  "configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
+  "experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
 
 echo "$(timestamp) overnight pipeline completed"

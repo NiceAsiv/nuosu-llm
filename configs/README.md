@@ -13,11 +13,11 @@
 | 研究 | `cpt_qwen3_8b_ocr_gt_research.yaml` | OCR GT 单卡 CPT |
 | 研究 | `sft_qwen3_8b_dictionary_research.yaml` | 词典单卡 SFT |
 | 研究 | `sft_qwen3_8b_bootstrap.yaml` | NuosuBench 单卡 SFT |
-| 三卡参考 | `*_3gpu.yaml` | 保守显存配置 |
-| 三卡实验 | `*_3gpu_fast.yaml` | 经过特定机器画像的高吞吐配置 |
 
-`fast` 配置不是跨机器默认值。换 GPU、PyTorch、attention backend 或数据长度分布后必须
-重新运行 `profile_dataset.py` 和 `benchmark_throughput.sh`。
+三卡和 `fast` 配置不是跨机器默认值，已移到
+[`../experiments/xjtu-3gpu/configs/`](../experiments/xjtu-3gpu/configs/)。换 GPU、PyTorch、
+attention backend 或数据长度分布后必须重新运行 `profile_dataset.py` 和
+`benchmark_throughput.sh`。
 
 2026-07-29 以前生成的 adapter 基于损坏底模，均已作废；这不等于这些 YAML 参数已经通过
 新底模验证。

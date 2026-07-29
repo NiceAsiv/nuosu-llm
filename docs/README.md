@@ -8,7 +8,8 @@
 4. [`04-evaluation.md`](04-evaluation.md)：自动指标与母语者盲评；
 5. [`05-deployment.md`](05-deployment.md)：合并 adapter、服务化和性能测试；
 6. [`06-training-server.md`](06-training-server.md)：服务器目录和硬件检查；
-7. [`09-publishing.md`](09-publishing.md)：GitHub、Hugging Face 与版本关联。
+7. [`07-lessons-learned.md`](07-lessons-learned.md)：首轮失败复盘与已经固化的保护；
+8. [`09-publishing.md`](09-publishing.md)：GitHub、Hugging Face 与版本关联。
 
 ## 按角色
 
@@ -19,4 +20,6 @@
 | 评测者 | 评测方案、`evaluation/README.md` |
 | 发布维护者 | 部署指南、发布指南、model card 模板 |
 
-实验报告位于 [`../evaluation/reports/`](../evaluation/reports/)，不与稳定使用说明混写。
+实验报告位于 [`../evaluation/reports/`](../evaluation/reports/)，特定硬件运行位于
+[`../experiments/`](../experiments/)，事故补丁位于 [`../patches/`](../patches/)；三者都
+不与稳定使用说明混写。

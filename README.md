@@ -23,6 +23,9 @@
 | 查找命令行工具 | [`scripts/README.md`](scripts/README.md) |
 | 训练与恢复 | [`docs/03-training-guide.md`](docs/03-training-guide.md) |
 | 正式评测 | [`evaluation/README.md`](evaluation/README.md) |
+| 查看特定硬件实验 | [`experiments/README.md`](experiments/README.md) |
+| 查看事故补丁 | [`patches/README.md`](patches/README.md) |
+| 阅读失败复盘 | [`docs/07-lessons-learned.md`](docs/07-lessons-learned.md) |
 | 查看文档地图 | [`docs/README.md`](docs/README.md) |
 
 ## 安全快速开始
@@ -48,36 +51,35 @@ workspace/
 └── nuosu-llm/       # 模型获取、训练、评测、合并、部署
 ```
 
-### 2. 恢复并验证基础模型
+### 2. 下载并验证基础模型
 
-先看执行计划，不修改任何文件：
-
-```bash
-bash scripts/model/recover_qwen3_base.sh
-```
-
-确认路径后执行：
+下载固定 revision：
 
 ```bash
-PROXY_URL=http://127.0.0.1:7897 \
-PYTHON_BIN="$(pwd)/.venv/bin/python" \
-bash scripts/model/recover_qwen3_base.sh --execute
+MODEL_DIR=/absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
+python scripts/model/download_snapshot.py \
+  --repo-id Qwen/Qwen3-8B-Base \
+  --revision 49e3418fbbbca6ecbdf9608b4d22e5a407081db4 \
+  --output-dir "${MODEL_DIR}"
 ```
 
-该脚本只移动隔离，不删除数据，并严格按顺序执行：
+验证实际权重并运行未训练底模冒烟：
 
-1. 隔离损坏的 Hugging Face 缓存；
-2. 隔离由坏底模训练出的 `outputs/qwen3-8b-*`；
-3. 下载固定 revision 到独立目录；
-4. 对五个权重分片计算实际 SHA-256；
-5. 用中文、英文和算术续写检查底模；
-6. 通过后写入 `VERIFIED.sha256`，但**不会自动开始训练**。
+```bash
+(cd "${MODEL_DIR}" && \
+  sha256sum --check /absolute/path/to/nuosu-llm/scripts/model/manifests/qwen3-8b-base-49e3418.sha256)
+python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
+cp scripts/model/manifests/qwen3-8b-base-49e3418.sha256 "${MODEL_DIR}/VERIFIED.sha256"
+```
+
+如果已经遇到与 2026-07-29 相同的坏缓存事故，需要隔离缓存和派生 adapter，再使用
+[`patches/2026-07-29/`](patches/2026-07-29/)；正常用户不需要运行事故补丁。
 
 ### 3. 检查语料
 
 ```bash
 python scripts/profile_dataset.py \
-  --config configs/sft_qwen3_8b_dictionary_research_3gpu_fast.yaml \
+  --config configs/sft_qwen3_8b_dictionary_research.yaml \
   --batch-size 32
 ```
 
@@ -86,11 +88,11 @@ python scripts/profile_dataset.py \
 
 ### 4. 只在门禁通过后训练
 
-恢复脚本会打印经过校验的本地模型目录。训练时显式传入该路径：
+训练时显式传入已经完成校验的本地模型目录：
 
 ```bash
 python scripts/train.py \
-  --config configs/cpt_qwen3_8b_ocr_gt_research_3gpu.yaml \
+  --config configs/cpt_qwen3_8b_ocr_gt_research.yaml \
   --base-model /absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
 ```
 
@@ -106,15 +108,18 @@ python scripts/train.py \
 bash scripts/gates/run_sft_overfit_64.sh "${VERIFIED_MODEL}"
 ```
 
-运行门禁并在通过后依次启动 OCR CPT、词典 SFT、NuosuBench 短样本和长尾阶段：
+默认入口不限定 GPU 数量。单卡直接运行上面的命令；多卡使用实际可用数量启动同一个
+`scripts/train.py`：
 
 ```bash
-bash scripts/pipeline/run_research_pipeline.sh "${VERIFIED_MODEL}"
+torchrun --standalone --nproc_per_node=NUM_GPUS \
+  scripts/train.py \
+  --config configs/sft_qwen3_8b_qlora.yaml \
+  --base-model "${VERIFIED_MODEL}"
 ```
 
-任一阶段失败都会终止流水线。该流水线不会自动运行保留测试集。
-
-当前仓库不会把历史整夜训练脚本当作推荐入口；它们保留在 `scripts/legacy/`，仅用于复现实验。
+三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
+[`experiments/xjtu-3gpu/`](experiments/xjtu-3gpu/)，仅用于复现实验。
 
 ## 标准工作流
 
@@ -167,11 +172,11 @@ validation 选择配置
 configs/              # CPT/SFT 配置；分级说明见 configs/README.md
 docs/                 # 架构、训练、评测、部署和发布文档
 evaluation/           # 评测协议与已归档报告
+experiments/          # 与特定硬件和数据快照绑定的实验
+patches/              # 按日期归档的一次性事故修复
 scripts/
-  model/              # 模型恢复、校验和底模门禁
+  model/              # 模型下载、校验和底模冒烟
   gates/              # 64 条过拟合与指标门槛
-  pipeline/           # 通过门禁后的分阶段训练
-  legacy/             # 非推荐的历史自动化流程
   *.py / *.sh         # 当前训练、评测和数据审计入口
 src/nuosu_llm/        # 可测试的核心 Python 代码
 tests/                # 单元测试
@@ -208,12 +213,15 @@ now requires a quarantined download, checksum verification, a base-generation
 smoke test, a 64-example overfit gate, and validation generation before a full
 run.
 
-Start with:
+Start with the generic single-GPU entry point:
 
 ```bash
-bash scripts/model/recover_qwen3_base.sh
-bash scripts/model/recover_qwen3_base.sh --execute
+python scripts/train.py \
+  --config configs/sft_qwen3_8b_qlora.yaml \
+  --base-model /absolute/path/to/verified-model
 ```
 
 See [`docs/README.md`](docs/README.md) for the documentation map and
-[`scripts/README.md`](scripts/README.md) for the command catalog.
+[`scripts/README.md`](scripts/README.md) for the command catalog. Hardware-specific
+runs are archived under [`experiments/`](experiments/), while one-off incident
+recovery tools live under [`patches/`](patches/).

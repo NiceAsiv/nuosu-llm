@@ -61,9 +61,9 @@ run_stage() {
 
 run_stage \
   sft-nuosubench-short \
-  configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml
+  experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_research_3gpu_fast.yaml
 run_stage \
   sft-nuosubench-long \
-  configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml
+  experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml
 
 echo "resume pipeline completed; run validation generation before held-out testing"

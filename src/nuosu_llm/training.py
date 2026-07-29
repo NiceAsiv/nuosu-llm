@@ -91,7 +91,7 @@ def require_verified_base_model(config: dict[str, Any]) -> Path:
     if not base_model.is_dir():
         raise FileNotFoundError(
             "基础模型必须是已校验的本地目录；请先运行 "
-            "scripts/model/recover_qwen3_base.sh，并用 --base-model 覆盖配置。"
+            "scripts/model/README.md 完成下载与验证，并用 --base-model 覆盖配置。"
         )
     verification_marker = base_model / "VERIFIED.sha256"
     if not verification_marker.is_file():

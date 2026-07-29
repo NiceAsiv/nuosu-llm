@@ -7,7 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-/home/xjtuoss/nuosu-project/nuosu-llm}"
 PYTHON_BIN="${PYTHON_BIN:-/home/xjtuoss/nuosu-project/.venv/bin/python}"
 SHORT_ADAPTER="${PROJECT_DIR}/outputs/qwen3-8b-nuosu-nuosubench-short-sft-3gpu-fast/adapter_model.safetensors"
 FINAL_ADAPTER="${PROJECT_DIR}/outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast/adapter_model.safetensors"
-LONG_CONFIG="configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
+LONG_CONFIG="experiments/xjtu-3gpu/configs/sft_qwen3_8b_nuosubench_long_research_3gpu_fast.yaml"
 LOG_PATH="${PROJECT_DIR}/logs/sft_nuosubench_long_3gpu.log"
 
 cd "${PROJECT_DIR}"

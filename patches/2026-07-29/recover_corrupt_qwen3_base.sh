@@ -11,7 +11,7 @@ MODEL_ROOT="${MODEL_ROOT:-$(cd -- "${PROJECT_DIR}/.." && pwd)/models}"
 MODEL_DIR="${MODEL_DIR:-${MODEL_ROOT}/Qwen3-8B-Base-${REVISION:0:12}}"
 QUARANTINE_ROOT="${QUARANTINE_ROOT:-$(cd -- "${PROJECT_DIR}/.." && pwd)/quarantine}"
 SOURCE_CACHE="${SOURCE_CACHE:-${HOME}/.cache/huggingface/hub/models--Qwen--Qwen3-8B-Base}"
-CHECKSUM_FILE="${CHECKSUM_FILE:-${SCRIPT_DIR}/manifests/qwen3-8b-base-49e3418.sha256}"
+CHECKSUM_FILE="${CHECKSUM_FILE:-${PROJECT_DIR}/scripts/model/manifests/qwen3-8b-base-49e3418.sha256}"
 EXECUTE=0
 QUARANTINE_OUTPUTS=1
 FORCE_DOWNLOAD=1
@@ -20,8 +20,8 @@ RUN_SMOKE=1
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/model/recover_qwen3_base.sh              # dry-run
-  bash scripts/model/recover_qwen3_base.sh --execute    # quarantine, download, verify, smoke-test
+  bash patches/2026-07-29/recover_corrupt_qwen3_base.sh
+  bash patches/2026-07-29/recover_corrupt_qwen3_base.sh --execute
 
 Options:
   --execute             Perform changes. Without this flag the script is read-only.
@@ -166,7 +166,6 @@ log "verifying actual model bytes"
   cd "${MODEL_DIR}"
   sha256sum --check "${CHECKSUM_FILE}"
 ) | tee "${REPORT_DIR}/sha256.txt"
-cp -- "${CHECKSUM_FILE}" "${MODEL_DIR}/VERIFIED.sha256"
 
 if [[ ${RUN_SMOKE} -eq 1 ]]; then
   log "running untouched-model generation gate on cuda:0"
@@ -175,6 +174,7 @@ if [[ ${RUN_SMOKE} -eq 1 ]]; then
       --model "${MODEL_DIR}" \
       --output "${REPORT_DIR}/smoke-test.json"
 fi
+cp -- "${CHECKSUM_FILE}" "${MODEL_DIR}/VERIFIED.sha256"
 
 cat > "${REPORT_DIR}/recovery.env" <<EOF
 REPO_ID=${REPO_ID}

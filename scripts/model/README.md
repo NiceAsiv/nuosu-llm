@@ -1,37 +1,26 @@
-# Verified model recovery / 模型恢复
+# Verified model acquisition / 模型获取与验证
 
-`recover_qwen3_base.sh` 是训练前的第一个入口。
+稳定目录只提供可组合的模型工具：
 
-默认运行是只读 dry-run：
-
-```bash
-bash scripts/model/recover_qwen3_base.sh
-```
-
-实际执行：
+- `download_snapshot.py`：下载固定仓库 revision；
+- `manifests/`：保存已审核 revision 的实际 SHA-256；
+- `smoke_test_base.py`：检查未训练底模的基本生成。
 
 ```bash
-PROXY_URL=http://127.0.0.1:7897 \
-PYTHON_BIN=/absolute/path/to/python \
-bash scripts/model/recover_qwen3_base.sh --execute
+MODEL_DIR=/absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
+python scripts/model/download_snapshot.py \
+  --repo-id Qwen/Qwen3-8B-Base \
+  --revision 49e3418fbbbca6ecbdf9608b4d22e5a407081db4 \
+  --output-dir "${MODEL_DIR}"
 ```
 
-安全属性：
-
-- 旧缓存与旧 adapter 只移动到带 UTC 时间戳的 quarantine，不删除；
-- 下载固定到显式 revision；
-- 下载使用独立 `HF_HOME`，不复用已损坏缓存；
-- 五个 safetensors 分片必须通过实际 SHA-256；
-- 底模必须通过三条可读生成检查；
-- 脚本不会自动启动训练。
-
-输出：
-
-```text
-../models/Qwen3-8B-Base-<revision>/VERIFIED.sha256
-artifacts/model-recovery/<timestamp>/
-../quarantine/<timestamp>/
+```bash
+(cd "${MODEL_DIR}" && \
+  sha256sum --check /absolute/path/to/nuosu-llm/scripts/model/manifests/qwen3-8b-base-49e3418.sha256)
+python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
+cp scripts/model/manifests/qwen3-8b-base-49e3418.sha256 "${MODEL_DIR}/VERIFIED.sha256"
 ```
 
-若下载中断，保留目标目录以便排查。重新执行时，脚本会先把已有目标目录移入 quarantine，
-不会在不确定状态下覆盖。
+训练入口要求本地模型目录存在 `VERIFIED.sha256`。如果需要隔离已经损坏的缓存和派生
+adapter，请使用按日期归档的 [`../../patches/2026-07-29/`](../../patches/2026-07-29/)；
+该补丁不是正常下载流程。
