@@ -73,6 +73,14 @@ def test_target_language_inference():
         )
         == "yi"
     )
+    assert (
+        infer_target_language(
+            "彝文“ꀀꁌ”在中文中怎么说？",
+            "彝文“ꀀꁌ”的中文意思是“测试”",
+        )
+        == "zh"
+    )
+    assert infer_target_language("“ꀀꁌ”的英文翻译是什么？", "test") == "en"
     assert infer_target_language("回答问题") == "unknown"
 
 

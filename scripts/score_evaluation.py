@@ -12,6 +12,50 @@ from typing import Any
 from nuosu_llm.unicode_utils import is_yi_syllable, normalize_text
 
 _SPACE_AND_PUNCTUATION = re.compile(r"[\s\W_]+", re.UNICODE)
+_ZH_TARGET_PATTERNS = (
+    "中文翻译是什么",
+    "汉语翻译是什么",
+    "翻译成中文",
+    "翻译成汉语",
+    "用中文",
+    "用汉语",
+    "中文意思",
+    "汉语意思",
+    "在中文中",
+    "在汉语中",
+    "转写为中文",
+    "转写为汉语",
+    "中文怎么说",
+    "汉语怎么说",
+)
+_YI_TARGET_PATTERNS = (
+    "彝文翻译是什么",
+    "彝语翻译是什么",
+    "翻译成彝文",
+    "翻译成彝语",
+    "翻成彝文",
+    "翻成彝语",
+    "用彝文",
+    "用彝语",
+    "彝文表达",
+    "彝语表达",
+    "的彝文",
+    "的彝语",
+)
+_EN_TARGET_PATTERNS = (
+    "英文翻译是什么",
+    "英语翻译是什么",
+    "翻译成英文",
+    "翻译成英语",
+    "用英文",
+    "用英语",
+    "英文意思",
+    "英语意思",
+    "在英文中",
+    "在英语中",
+    "英文怎么说",
+    "英语怎么说",
+)
 
 
 def compact_text(text: str) -> str:
@@ -20,12 +64,14 @@ def compact_text(text: str) -> str:
 
 
 def infer_target_language(prompt: str, reference: str = "") -> str:
-    if any(is_yi_syllable(char) for char in normalize_text(reference)):
-        return "yi"
     normalized = normalize_text(prompt)
-    if "中文" in normalized or "汉语" in normalized:
+    if any(pattern in normalized for pattern in _ZH_TARGET_PATTERNS):
         return "zh"
-    if "彝文" in normalized or "彝语" in normalized:
+    if any(pattern in normalized for pattern in _YI_TARGET_PATTERNS):
+        return "yi"
+    if any(pattern in normalized for pattern in _EN_TARGET_PATTERNS):
+        return "en"
+    if any(is_yi_syllable(char) for char in normalize_text(reference)):
         return "yi"
     return "unknown"
 
@@ -165,7 +211,7 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     result = {"overall": summarize(scored), "by_target_language": {}}
-    for language in ("yi", "zh", "unknown"):
+    for language in ("yi", "zh", "en", "unknown"):
         group = [item for item in scored if item["target_language"] == language]
         if group:
             result["by_target_language"][language] = summarize(group)

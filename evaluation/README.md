@@ -82,7 +82,7 @@ python scripts/score_evaluation.py \
   --output-markdown evaluation/results/qwen3-8b-nuosu-research-test.metrics.md
 ```
 
-报告给出 overall 以及按目标语言 `yi`、`zh`、`unknown` 分组的：
+报告给出 overall 以及按目标语言 `yi`、`zh`、`en`、`unknown` 分组的：
 
 - exact match 与忽略空白、标点后的 compact exact match；
 - reference containment；
