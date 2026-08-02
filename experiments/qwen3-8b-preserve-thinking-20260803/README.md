@@ -16,7 +16,9 @@ The official upstream chat template is retained.
 - `M0`: frozen official post-trained Qwen3-8B;
 - `M1`: archived Base-derived translation adapter, negative control;
 - `M2`: M0 plus one low-learning-rate Nuosu CPT epoch;
-- `M3`: M2 plus one contextual-`/no_think` completion-only SFT epoch.
+- `M3`: one contextual-`/no_think` completion-only SFT epoch, initialized from
+  M2 only if the post-CPT reasoning canary retains at least 95% of M0; otherwise
+  initialized directly from M0.
 
 The primary preservation endpoint is the reasoning composite retention ratio
 `score(M3) / score(M0)`. The preregistered non-inferiority threshold is 0.95.
@@ -24,6 +26,12 @@ The quick canary is only an operational gate; paper claims must use fixed public
 benchmark revisions and bootstrap confidence intervals. NuosuBench overlaps are
 always disclosed and are never described as an uncontaminated test. Final Nuosu
 quality requires blinded native-speaker ratings.
+
+The CPT-to-SFT transition is therefore conditional. A post-CPT canary result
+below 0.95 stops adapter propagation; it does not stop the experiment or permit
+retuning the threshold after seeing the result. This safety rule limits
+reasoning drift while keeping the eight-item canary separate from formal model
+selection and publication claims.
 
 ## Training stages
 

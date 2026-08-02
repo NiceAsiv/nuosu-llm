@@ -62,7 +62,15 @@ comparisons:
   - id: m2
     model: m0 plus Nuosu CPT adapter
   - id: m3
-    model: m2 plus contextual-no-think Nuosu SFT
+    model: selected SFT path under the preregistered CPT safety rule
+
+stage_gate:
+  after_cpt:
+    metric: reasoning canary retention relative to m0
+    threshold: 0.95
+    pass_action: Initialize contextual-no-think SFT from the m2 CPT adapter.
+    fail_action: Do not propagate the CPT adapter; initialize SFT directly from m0.
+    interpretation: The canary is an operational safety gate, not a paper-level efficacy endpoint.
 
 primary_outcomes:
   reasoning_retention:
@@ -77,6 +85,7 @@ evaluation:
   post_sft: [reasoning canary, public benchmark diagnostics, Nuosu diagnostics, native review]
   public_reasoning_suites: [GSM8K, MMLU-Pro, IFEval]
   reporting_rule: Report exact model/data/code revisions, confidence intervals, and all overlap caveats.
+  canary_scope: Operational regression detection only; never use eight canary items as the formal reasoning claim.
   contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
 
 reproducibility:

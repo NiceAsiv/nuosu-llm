@@ -53,23 +53,23 @@ workspace/
 
 ### 2. 下载并验证基础模型
 
-下载固定 revision：
+下载包含 Qwen3 后训练与混合思考能力的固定 revision（不要使用仅预训练的
+`Qwen3-8B-Base` 作为本实验底模）：
 
 ```bash
-MODEL_DIR=/absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
+MODEL_DIR=/absolute/path/to/models/Qwen3-8B-b968826d
 python scripts/model/download_snapshot.py \
-  --repo-id Qwen/Qwen3-8B-Base \
-  --revision 49e3418fbbbca6ecbdf9608b4d22e5a407081db4 \
+  --repo-id Qwen/Qwen3-8B \
+  --revision b968826d9c46dd6066d109eabc6255188de91218 \
   --output-dir "${MODEL_DIR}"
 ```
 
-验证实际权重并运行未训练底模冒烟：
+下载脚本会对落盘文件计算 SHA-256 并生成 `VERIFIED.sha256` 和
+`snapshot_manifest.json`。验证实际文件后再运行未训练底模冒烟：
 
 ```bash
-(cd "${MODEL_DIR}" && \
-  sha256sum --check /absolute/path/to/nuosu-llm/scripts/model/manifests/qwen3-8b-base-49e3418.sha256)
+(cd "${MODEL_DIR}" && sha256sum --check VERIFIED.sha256)
 python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
-cp scripts/model/manifests/qwen3-8b-base-49e3418.sha256 "${MODEL_DIR}/VERIFIED.sha256"
 ```
 
 如果已经遇到与 2026-07-29 相同的坏缓存事故，需要隔离缓存和派生 adapter，再使用
@@ -103,7 +103,7 @@ python scripts/profile_dataset.py \
 ```bash
 python scripts/train.py \
   --config configs/cpt_qwen3_8b_qlora.yaml \
-  --base-model /absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
+  --base-model /absolute/path/to/models/Qwen3-8B-b968826d
 ```
 
 正式大规模训练前还必须通过：
@@ -262,10 +262,13 @@ revision、随机种子、硬件、训练参数和 validation 结果。
 
 Nuosu LLM is a reproducible training and evaluation toolkit for Standard
 Liangshan Yi (Nuosu). The first experimental run is invalid because all five
-cached Base-model shards failed byte-level SHA-256 verification. The repository
-now requires a quarantined download, checksum verification, a base-generation
-smoke test, a 64-example overfit gate, and validation generation before a full
-run.
+cached Base-model shards failed byte-level SHA-256 verification. The
+capability-preserving experiment now uses the post-trained `Qwen/Qwen3-8B` at a
+fixed revision, retains its official hybrid-thinking chat template, and applies
+completion-only Nuosu SFT under an explicit contextual `/no_think` instruction.
+The repository requires a quarantined download, per-file checksum verification,
+a base-generation smoke test, a reasoning regression gate, and validation
+generation before a full run.
 
 Start with the generic single-GPU entry point:
 
