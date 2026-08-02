@@ -92,6 +92,8 @@ def main() -> None:
     lengths = [min(length, max_length) for length in raw_lengths]
     ordered = sorted(lengths)
     total_tokens = sum(lengths)
+    raw_total_tokens = sum(raw_lengths)
+    discarded_tokens = raw_total_tokens - total_tokens
     padded_tokens = grouped_padding_tokens(lengths, args.batch_size)
     packed_sequences = math.ceil(total_tokens / max_length)
 
@@ -105,7 +107,10 @@ def main() -> None:
         "truncated_samples": sum(length > max_length for length in raw_lengths),
         "raw_max_length": max(raw_lengths),
         "tokens": {
+            "raw_total": raw_total_tokens,
             "total": total_tokens,
+            "discarded_by_truncation": discarded_tokens,
+            "retained_ratio": round(total_tokens / raw_total_tokens, 6),
             "mean": round(total_tokens / len(lengths), 2),
             "p50": percentile(ordered, 0.50),
             "p90": percentile(ordered, 0.90),
