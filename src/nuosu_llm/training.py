@@ -179,7 +179,7 @@ def run_training(config: dict[str, Any]) -> None:
 
     model_kwargs = {
         "quantization_config": quantization_config,
-        "torch_dtype": _dtype(torch, quant.get("compute_dtype", "bfloat16")),
+        "dtype": _dtype(torch, quant.get("compute_dtype", "bfloat16")),
         "device_map": {"": local_rank},
     }
     attn_implementation = training.get("attn_implementation")
@@ -239,6 +239,7 @@ def run_training(config: dict[str, Any]) -> None:
     train_batch_size = int(training.get("per_device_train_batch_size", 1))
     accumulation_steps = int(training.get("gradient_accumulation_steps", 16))
     dataloader_workers = int(training.get("dataloader_num_workers", 0))
+    group_by_length = bool(training.get("group_by_length", False))
     sft_kwargs = dict(
         output_dir=config["output_dir"],
         seed=int(config.get("seed", 42)),
@@ -276,7 +277,6 @@ def run_training(config: dict[str, Any]) -> None:
         ),
         ddp_bucket_cap_mb=training.get("ddp_bucket_cap_mb"),
         ddp_broadcast_buffers=bool(training.get("ddp_broadcast_buffers", False)),
-        group_by_length=bool(training.get("group_by_length", False)),
         dataloader_num_workers=dataloader_workers,
         dataloader_pin_memory=bool(training.get("dataloader_pin_memory", True)),
         dataloader_persistent_workers=bool(
@@ -285,8 +285,11 @@ def run_training(config: dict[str, Any]) -> None:
         optim=training.get("optim", "adamw_torch"),
         max_steps=int(training.get("max_steps", -1)),
         report_to=report_targets,
-        dataset_text_field="text" if stage == "cpt" else None,
     )
+    if stage == "cpt":
+        sft_kwargs["dataset_text_field"] = "text"
+    if group_by_length:
+        sft_kwargs["train_sampling_strategy"] = "group_by_length"
     if dataloader_workers > 0:
         sft_kwargs["dataloader_prefetch_factor"] = int(
             training.get("dataloader_prefetch_factor", 2)
@@ -304,7 +307,8 @@ def run_training(config: dict[str, Any]) -> None:
             "compute_dtype": quant.get("compute_dtype", "bfloat16"),
             "packing": sft_args.packing,
             "packing_strategy": sft_args.packing_strategy,
-            "group_by_length": sft_args.group_by_length,
+            "group_by_length": group_by_length,
+            "train_sampling_strategy": sft_args.train_sampling_strategy,
             "assistant_only_loss": assistant_only_loss,
             "completion_only_loss": completion_only_loss,
             "prompt_completion": prompt_completion,
