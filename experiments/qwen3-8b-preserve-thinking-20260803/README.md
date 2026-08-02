@@ -41,6 +41,13 @@ selected recipe with seeds 42, 43, and 44, reports every seed and the across-see
 mean and standard deviation, and adds item-level bootstrap confidence intervals.
 The hidden/native-speaker test is scored only after that freeze.
 
+The seed-42 M0 diagnostic with `max_new_tokens=512` was retained as an invalid
+pilot because all eight generations hit the length limit before closing the
+thinking block. It is not used in a retention ratio. The fixed operational
+canary protocol uses thinking mode, sampling temperature 0.6, top-p 0.95, and
+`max_new_tokens=2048`; any length-truncated comparison run is invalidated rather
+than scored as a reasoning failure.
+
 ## Training stages
 
 ```bash

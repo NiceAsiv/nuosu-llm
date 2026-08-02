@@ -97,6 +97,14 @@ evaluation:
   reporting_rule: Report exact model/data/code revisions, confidence intervals, and all overlap caveats.
   canary_scope: Operational regression detection only; never use eight canary items as the formal reasoning claim.
   test_access_rule: Freeze the final recipe before formal hidden or native-speaker test scoring.
+  reasoning_canary_generation:
+    thinking_mode: true
+    do_sample: true
+    temperature: 0.6
+    top_p: 0.95
+    seed: 42
+    max_new_tokens: 2048
+    truncation_rule: Any length-truncated canary run is invalid for retention comparison and must be rerun with a sufficient fixed limit.
   contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
 
 reproducibility:
