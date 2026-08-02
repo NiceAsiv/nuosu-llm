@@ -10,6 +10,10 @@ base_model:
   revision: b968826d9c46dd6066d109eabc6255188de91218
   training_stage: pretraining_and_posttraining
   thinking_default: true
+  acquisition:
+    endpoint: https://hf-mirror.com
+    reason: The training host timed out connecting to huggingface.co on 2026-08-03.
+    identity_verification: Fixed repository revision plus per-file SHA-256 manifest.
 
 dataset:
   repo_id: NiceAsiv/nuosu-corpus
