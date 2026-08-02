@@ -41,12 +41,14 @@ selected recipe with seeds 42, 43, and 44, reports every seed and the across-see
 mean and standard deviation, and adds item-level bootstrap confidence intervals.
 The hidden/native-speaker test is scored only after that freeze.
 
-The seed-42 M0 diagnostic with `max_new_tokens=512` was retained as an invalid
-pilot because all eight generations hit the length limit before closing the
-thinking block. It is not used in a retention ratio. The fixed operational
-canary protocol uses thinking mode, sampling temperature 0.6, top-p 0.95, and
-`max_new_tokens=2048`; any length-truncated comparison run is invalidated rather
-than scored as a reasoning failure.
+The seed-42 M0 diagnostics with `max_new_tokens=512` and 2048 are retained as
+invalid pilots. The 512-token run truncated all eight generations; the
+2048-token run still truncated four of eight and left two thinking blocks
+unclosed. Neither is used in a retention ratio. Before observing any adapted
+model, the operational canary limit was frozen at 8192 tokens. It uses thinking
+mode, sampling temperature 0.6, and top-p 0.95; EOS still ends short responses
+early. Any length-truncated comparison run is invalidated rather than scored as
+a reasoning failure.
 
 ## Training stages
 

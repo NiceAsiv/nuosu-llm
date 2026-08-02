@@ -103,7 +103,7 @@ evaluation:
     temperature: 0.6
     top_p: 0.95
     seed: 42
-    max_new_tokens: 2048
+    max_new_tokens: 8192
     truncation_rule: Any length-truncated canary run is invalid for retention comparison and must be rerun with a sufficient fixed limit.
   contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
 
