@@ -1,6 +1,7 @@
 experiment_id: qwen3-8b-nuosu-preserve-thinking-20260803
 status: preregistered_before_training
 objective: Add Standard Liangshan Yi capability while retaining Qwen3-8B reasoning behavior.
+study_phase: development_run_before_confirmatory_replication
 hypotheses:
   h1: Low-rank, low-learning-rate Nuosu adaptation improves Nuosu task performance.
   h2: Contextual /no_think SFT retains at least 95% of the base reasoning composite.
@@ -54,6 +55,13 @@ training:
       prompt_transform: append /no_think to the final user message
       chat_template: preserve upstream Qwen3 template
 
+replication_plan:
+  development_run_seed: 42
+  confirmatory_seeds: [42, 43, 44]
+  selection_rule: Freeze the selected CPT/SFT path and all hyperparameters before confirmatory repeats.
+  aggregate_reporting: Report each seed, mean and standard deviation across seeds, and item-level bootstrap confidence intervals.
+  current_scope: This launch executes only the development run; it is not by itself sufficient for a stability claim.
+
 comparisons:
   - id: m0
     model: frozen Qwen3-8B post-trained base
@@ -66,8 +74,10 @@ comparisons:
 
 stage_gate:
   after_cpt:
-    metric: reasoning canary retention relative to m0
-    threshold: 0.95
+    metrics:
+      answer_retention: reference-contained accuracy relative to m0, threshold 0.95
+      thinking_structure: nonempty terminated thinking rate no more than 0.05 below m0
+    pass_condition: Both metrics pass after manual inspection of all eight responses.
     pass_action: Initialize contextual-no-think SFT from the m2 CPT adapter.
     fail_action: Do not propagate the CPT adapter; initialize SFT directly from m0.
     interpretation: The canary is an operational safety gate, not a paper-level efficacy endpoint.
@@ -86,6 +96,7 @@ evaluation:
   public_reasoning_suites: [GSM8K, MMLU-Pro, IFEval]
   reporting_rule: Report exact model/data/code revisions, confidence intervals, and all overlap caveats.
   canary_scope: Operational regression detection only; never use eight canary items as the formal reasoning claim.
+  test_access_rule: Freeze the final recipe before formal hidden or native-speaker test scoring.
   contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
 
 reproducibility:

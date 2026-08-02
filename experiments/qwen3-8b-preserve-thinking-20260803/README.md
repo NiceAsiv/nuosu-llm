@@ -28,10 +28,18 @@ always disclosed and are never described as an uncontaminated test. Final Nuosu
 quality requires blinded native-speaker ratings.
 
 The CPT-to-SFT transition is therefore conditional. A post-CPT canary result
-below 0.95 stops adapter propagation; it does not stop the experiment or permit
-retuning the threshold after seeing the result. This safety rule limits
-reasoning drift while keeping the eight-item canary separate from formal model
-selection and publication claims.
+below 0.95 answer retention, or a nonempty terminated-thinking rate more than
+0.05 below M0, stops adapter propagation. All eight outputs are also inspected
+before the decision. Failure does not stop the experiment or permit retuning the
+threshold after seeing the result. This safety rule limits reasoning drift while
+keeping the eight-item canary separate from formal model selection and
+publication claims.
+
+This first launch is the seed-42 development run. After its path and
+hyperparameters are frozen, a paper-level confirmatory experiment repeats the
+selected recipe with seeds 42, 43, and 44, reports every seed and the across-seed
+mean and standard deviation, and adds item-level bootstrap confidence intervals.
+The hidden/native-speaker test is scored only after that freeze.
 
 ## Training stages
 

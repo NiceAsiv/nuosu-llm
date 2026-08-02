@@ -179,6 +179,19 @@ def mean(values: list[float]) -> float:
     return statistics.mean(values) if values else 0.0
 
 
+def thinking_span(text: str) -> str | None:
+    """Extract text before Qwen3's thinking terminator, with or without an opener."""
+    folded = text.casefold()
+    close_index = folded.find("</think>")
+    if close_index < 0:
+        return None
+    prefix = text[:close_index]
+    open_index = prefix.casefold().rfind("<think>")
+    if open_index >= 0:
+        prefix = prefix[open_index + len("<think>") :]
+    return prefix.strip()
+
+
 def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     scored: list[dict[str, Any]] = []
     for row in rows:
@@ -190,6 +203,7 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         target_language = infer_target_language(prompt, reference)
         reference_yi = yi_only(reference)
         response_yi = yi_only(response)
+        thought = thinking_span(response)
         scored.append(
             {
                 "target_language": target_language,
@@ -203,6 +217,9 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "response_chars": len(response),
                 "replacement_character": "\ufffd" in response,
                 "length_truncated": row.get("stop_reason") == "length",
+                "thinking_terminated": thought is not None,
+                "thinking_nonempty": bool(thought),
+                "thinking_chars": len(thought or ""),
                 "yi_exact": bool(reference_yi) and response_yi == reference_yi,
                 "yi_reference_contained": bool(reference_yi)
                 and reference_yi in response_yi,
@@ -230,6 +247,13 @@ def score_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "length_truncation_rate": round(
                 mean([float(item["length_truncated"]) for item in items]), 6
             ),
+            "thinking_terminated_rate": round(
+                mean([float(item["thinking_terminated"]) for item in items]), 6
+            ),
+            "thinking_nonempty_rate": round(
+                mean([float(item["thinking_nonempty"]) for item in items]), 6
+            ),
+            "mean_thinking_chars": round(mean([item["thinking_chars"] for item in items]), 3),
             "mean_response_chars": round(
                 mean([item["response_chars"] for item in items]), 3
             ),
@@ -272,8 +296,8 @@ def render_markdown(label: str, metrics: dict[str, Any]) -> str:
         f"# Evaluation: {label}",
         "",
         "| Split | Records | Exact | chrF2 | CER | Empty | Length stop | "
-        "Replacement char | Yi exact | Tokens | sec/sample |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Think closed | Think chars | Replacement char | Yi exact | Tokens | sec/sample |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     groups = [("overall", metrics["overall"])] + list(
         metrics["by_target_language"].items()
@@ -283,6 +307,8 @@ def render_markdown(label: str, metrics: dict[str, Any]) -> str:
             f"| {name} | {values['records']} | {values['compact_exact_match']:.4f} | "
             f"{values['mean_chrf2']:.2f} | {values['mean_cer']:.3f} | "
             f"{values['empty_rate']:.4f} | {values['length_truncation_rate']:.4f} | "
+            f"{values['thinking_terminated_rate']:.4f} | "
+            f"{values['mean_thinking_chars']:.1f} | "
             f"{values['replacement_character_rate']:.4f} | "
             f"{values['yi_exact_match']:.4f} | "
             f"{values['mean_generated_tokens']:.1f} | "
