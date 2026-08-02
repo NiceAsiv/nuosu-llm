@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,10 @@ def token_length(
             tokenize=True,
             add_generation_prompt=False,
         )
+        if isinstance(token_ids, Mapping):
+            token_ids = token_ids["input_ids"]
+        if token_ids and isinstance(token_ids[0], list):
+            token_ids = token_ids[0]
     else:
         token_ids = tokenizer(row["text"], add_special_tokens=True)["input_ids"]
     return len(token_ids)
