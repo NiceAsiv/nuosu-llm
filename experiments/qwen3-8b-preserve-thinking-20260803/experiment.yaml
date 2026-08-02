@@ -44,6 +44,10 @@ hardware:
 training:
   seed: 42
   precision: QLoRA NF4 with BF16 compute
+  sequence_batching:
+    packing: false
+    attention_implementation: sdpa
+    reason: TRL 0.29 packing requires a supported FlashAttention backend to prevent cross-example attention; the host has neither flash_attn nor nvcc.
   trainable_modules: [q_proj, k_proj, v_proj, o_proj]
   lora_rank: 16
   lora_alpha: 32

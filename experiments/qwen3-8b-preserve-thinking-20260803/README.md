@@ -41,6 +41,13 @@ selected recipe with seeds 42, 43, and 44, reports every seed and the across-see
 mean and standard deviation, and adds item-level bootstrap confidence intervals.
 The hidden/native-speaker test is scored only after that freeze.
 
+Packing is disabled for the formal development run. The host provides PyTorch
+SDPA but neither `flash_attn` nor `nvcc`; TRL 0.29 warns that its packed,
+padding-free representation can permit cross-example attention without a
+supported FlashAttention implementation. The successful packed one-step smoke
+is retained only as a compatibility diagnostic and is never propagated into
+the CPT/SFT chain.
+
 The seed-42 M0 diagnostics with `max_new_tokens=512` and 2048 are retained as
 invalid pilots. The 512-token run truncated all eight generations; the
 2048-token run still truncated four of eight and left two thinking blocks
