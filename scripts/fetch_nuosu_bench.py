@@ -42,10 +42,8 @@ def main() -> None:
         "revision": args.revision or "default",
         "rows": len(dataset),
         "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "project_use": "base_model_comparison",
-        "research_training_splits": (
-            "../nuosu-corpus/data/processed/bootstrap_nuosu_bench"
-        ),
+        "project_use": "diagnostic_evaluation_and_overlap_audit",
+        "training_eligible": False,
         "output": str(output_path),
     }
     (output_dir / "manifest.json").write_text(

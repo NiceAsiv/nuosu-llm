@@ -1,9 +1,10 @@
 stage: cpt
 base_model: Qwen/Qwen3-8B-Base
-train_file: ../nuosu-corpus/data/processed/cpt/train.jsonl
-eval_file: ../nuosu-corpus/data/processed/cpt/validation.jsonl
+train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl
 output_dir: outputs/qwen3-8b-cpt-qlora
 seed: 42
+data_revision: v2026.08.02
+data_policy: all_usable_nuosu_cpt
 
 quantization:
   enabled: true

@@ -1,10 +1,11 @@
 stage: sft
 base_model: Qwen/Qwen3-8B-Base
 # 完成 CPT 后，可将 base_model 改为合并后的 CPT 模型路径。
-train_file: ../nuosu-corpus/data/processed/sft/train.jsonl
-eval_file: ../nuosu-corpus/data/processed/sft/validation.jsonl
+train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
 output_dir: outputs/qwen3-8b-sft-qlora
 seed: 42
+data_revision: v2026.08.02
+data_policy: all_usable_nuosu_sft
 
 quantization:
   enabled: true

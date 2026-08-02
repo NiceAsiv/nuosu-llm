@@ -1,11 +1,12 @@
-stage: cpt
+stage: sft
 base_model: Qwen/Qwen3-1.7B-Base
-train_file: ../nuosu-corpus/data/processed/nuosubburma_ocr_gt_research/train.jsonl
-eval_file: ../nuosu-corpus/data/processed/nuosubburma_ocr_gt_research/validation.jsonl
-output_dir: outputs/qwen3-1.7b-nuosu-ocr-gt-cpt
+init_adapter: outputs/qwen3-1.7b-nuosu-cpt
+train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
+output_dir: outputs/qwen3-1.7b-nuosu-sft
 seed: 42
 
-data_policy: academic_research_with_source_attribution
+data_revision: v2026.08.02
+data_policy: all_usable_nuosu_sft
 
 quantization:
   enabled: false
@@ -20,20 +21,20 @@ lora:
 
 training:
   max_length: 2048
-  packing: false
-  assistant_only_loss: false
+  packing: true
+  assistant_only_loss: true
   per_device_train_batch_size: 2
   per_device_eval_batch_size: 2
   gradient_accumulation_steps: 4
   gradient_checkpointing: true
-  learning_rate: 0.00005
-  num_train_epochs: 3
+  learning_rate: 0.00008
+  num_train_epochs: 2
   warmup_ratio: 0.03
   weight_decay: 0.01
   lr_scheduler_type: cosine
-  logging_steps: 1
-  eval_steps: 25
-  save_steps: 25
+  logging_steps: 10
+  eval_steps: 250
+  save_steps: 250
   save_total_limit: 2
   bf16: true
   fp16: false

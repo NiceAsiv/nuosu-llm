@@ -8,12 +8,13 @@
 | 类型 | 配置 | 用途 |
 |---|---|---|
 | 门禁 | `gates/sft_overfit_64.yaml` | 64 条确定性过拟合，不用于发布 |
-| 配方 | `../recipes/qwen3-1.7b-full/` | 1.7B OCR CPT + 完整 SFT 流水线 |
-| 模板 | `cpt_qwen3_8b_qlora.yaml` | 自建连续文本 CPT 起点 |
-| 模板 | `sft_qwen3_8b_qlora.yaml` | 自建 messages SFT 起点 |
-| 研究 | `cpt_qwen3_8b_ocr_gt_research.yaml` | OCR GT 单卡 CPT |
-| 研究 | `sft_qwen3_8b_dictionary_research.yaml` | 词典单卡 SFT |
-| 研究 | `sft_qwen3_8b_bootstrap.yaml` | NuosuBench 单卡 SFT |
+| 配方 | `../recipes/qwen3-1.7b-full/` | 1.7B 全量 CPT + 全量 SFT 流水线 |
+| 模板 | `cpt_qwen3_8b_qlora.yaml` | `ready_cpt.jsonl` 全量 CPT |
+| 模板 | `sft_qwen3_8b_qlora.yaml` | `ready_sft.jsonl` 全量 SFT |
+
+当前稳定配置固定使用 `NiceAsiv/nuosu-corpus@v2026.08.02`。先运行
+`python scripts/download_training_corpus.py`，下载结果默认写入 sibling `nuosu-corpus` 仓库的
+`data/hf/nuosu-corpus/`。旧 OCR-only、词典-only 和 NuosuBench 训练配置已经移除。
 
 三卡和 `fast` 配置不是跨机器默认值，已移到
 [`../experiments/three-gpu-24gb/configs/`](../experiments/three-gpu-24gb/configs/)。换 GPU、PyTorch、

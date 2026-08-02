@@ -1,15 +1,14 @@
 # Qwen3-1.7B full Nuosu recipe
 
-This recipe mirrors the validated 8B data route with a smaller BF16 LoRA model:
+This recipe trains a smaller BF16 LoRA model on the pinned task-oriented corpus:
 
-1. OCR ground-truth continued pretraining;
-2. dictionary SFT;
-3. NuosuBench short-sequence SFT;
-4. NuosuBench long-tail SFT.
+1. continued pretraining on all 4,238 usable `ready_cpt.jsonl` records;
+2. supervised fine-tuning on all 113,269 usable `ready_sft.jsonl` records.
 
-The fourth stage contains longer benchmark-derived examples, not a dedicated
-multi-turn dialogue corpus. Add a separate dialogue stage only after genuine
-reviewed dialogue data becomes available.
+Both files come from `NiceAsiv/nuosu-corpus` revision `v2026.08.02`. Run
+`python scripts/download_training_corpus.py` before starting. The corpus snapshot
+does not contain a held-out validation split, so evaluation must use a separately
+maintained blind set.
 
 Run on one or more GPUs with the same entry point:
 

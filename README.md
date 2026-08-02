@@ -5,7 +5,7 @@
 
 面向凉山规范彝文（诺苏语）的可复现训练与评测工具。
 
-> **当前状态（2026-07-29）**
+> **当前状态（2026-08-02）**
 >
 > 第一轮实验使用了内容损坏的 `Qwen3-8B-Base` 缓存，因此该轮所有 adapter 和测试分数均
 > 无效，不能发布。仓库现已把模型实际 SHA-256 校验和生成冒烟测试设为训练前置门禁。
@@ -75,11 +75,21 @@ cp scripts/model/manifests/qwen3-8b-base-49e3418.sha256 "${MODEL_DIR}/VERIFIED.s
 如果已经遇到与 2026-07-29 相同的坏缓存事故，需要隔离缓存和派生 adapter，再使用
 [`patches/2026-07-29/`](patches/2026-07-29/)；正常用户不需要运行事故补丁。
 
-### 3. 检查语料
+### 3. 下载并检查语料
+
+下载固定的 Hugging Face 数据版本并核验 `manifest.json` 中的 SHA-256：
+
+```bash
+python scripts/download_training_corpus.py
+```
+
+默认下载 `NiceAsiv/nuosu-corpus@v2026.08.02` 中的 4,238 条 CPT 和 113,269 条 SFT，
+写入 sibling 仓库的 `data/hf/nuosu-corpus/`。训练配置不会读取 Hugging Face 的可变
+`main` 分支。
 
 ```bash
 python scripts/profile_dataset.py \
-  --config configs/sft_qwen3_8b_dictionary_research.yaml \
+  --config configs/sft_qwen3_8b_qlora.yaml \
   --batch-size 32
 ```
 
@@ -92,7 +102,7 @@ python scripts/profile_dataset.py \
 
 ```bash
 python scripts/train.py \
-  --config configs/cpt_qwen3_8b_ocr_gt_research.yaml \
+  --config configs/cpt_qwen3_8b_qlora.yaml \
   --base-model /absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
 ```
 
@@ -118,8 +128,8 @@ torchrun --standalone --nproc_per_node=NUM_GPUS \
   --base-model "${VERIFIED_MODEL}"
 ```
 
-面向较小算力的 1.7B 完整配方沿用 8B 的四阶段数据路线：OCR GT CPT、词典
-SFT、NuosuBench 短序列 SFT 和长尾序列 SFT。
+面向较小算力的 1.7B 完整配方采用两阶段路线：全量连续文本 CPT，然后使用统一
+`ready_sft.jsonl` 做全量 SFT。
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2 NUM_GPUS=3 \
@@ -127,8 +137,8 @@ CUDA_VISIBLE_DEVICES=0,1,2 NUM_GPUS=3 \
   /absolute/path/to/verified/Qwen3-1.7B-Base
 ```
 
-长尾阶段是较长的 benchmark 衍生样本，并非真正的多轮长对话语料。配方与单卡、
-双卡或更多 GPU 通用，`NUM_GPUS` 决定进程数。
+配方与单卡、双卡或更多 GPU 通用，`NUM_GPUS` 决定进程数。当前数据快照不提供训练内
+validation；模型选择和最终报告应使用项目另行维护的盲评集。
 
 三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
 [`experiments/three-gpu-24gb/`](experiments/three-gpu-24gb/)，仅用于复现实验。
@@ -194,15 +204,13 @@ validation 选择配置
 
 ## 数据来源
 
-- [彝汉电子词典](https://www.yixueyanjiu.com/dict/)：词典翻译数据；
+- [NiceAsiv/nuosu-corpus](https://huggingface.co/datasets/NiceAsiv/nuosu-corpus)：
+  统一的全量 CPT/SFT 训练入口，训练固定使用 `v2026.08.02`；
 - [TianYeZ1214/NuosuBench](https://huggingface.co/datasets/TianYeZ1214/NuosuBench)：
-  翻译/问答与保留研究测试；
-- [isljsy/yidir](https://github.com/isljsy/yidir)：喜德读音研究与 PUA 映射参考；
-- [NuosuBburma OCR Evaluation Set](https://huggingface.co/datasets/nanxidajun/NuosuBburma-OCR-Evaluation-Set)：
-  连续文本 GT。
+  外部评测和重合审计，不作为本仓库训练配置的输入。
 
-来源 revision、构建参数、方言标签和数据统计由 `nuosu-corpus` 管理。当前数据足以做研究
-基线，但长文章、多轮对话和母语者评测仍明显不足。
+上游来源、revision、构建参数、方言标签和数据统计由 `nuosu-corpus` 管理。当前数据足以做研究
+基线，但多轮对话和母语者评测仍明显不足。
 
 ## 仓库结构
 
