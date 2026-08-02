@@ -336,7 +336,11 @@ def run_training(config: dict[str, Any]) -> None:
                 )
     trainer.train(resume_from_checkpoint=training.get("resume_from_checkpoint"))
     trainer.save_model(config["output_dir"])
-    tokenizer.save_pretrained(config["output_dir"])
+    if trainer.is_world_process_zero():
+        tokenizer.save_pretrained(config["output_dir"])
+    if world_size > 1 and torch.distributed.is_initialized():
+        torch.distributed.barrier()
+        torch.distributed.destroy_process_group()
 
 
 def build_parser() -> argparse.ArgumentParser:
