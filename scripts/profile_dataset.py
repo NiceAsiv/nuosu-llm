@@ -6,8 +6,6 @@ import math
 from pathlib import Path
 from typing import Any
 
-from transformers import AutoTokenizer
-
 from nuosu_llm.config import load_config
 from nuosu_llm.training import (
     ensure_assistant_mask_chat_template,
@@ -37,8 +35,11 @@ def token_length(
     stage: str,
 ) -> int:
     if stage == "sft":
+        messages = row.get("messages")
+        if messages is None:
+            messages = [*row["prompt"], *row["completion"]]
         token_ids = tokenizer.apply_chat_template(
-            row["messages"],
+            messages,
             tokenize=True,
             add_generation_prompt=False,
         )
@@ -48,28 +49,40 @@ def token_length(
 
 
 def main() -> None:
+    from transformers import AutoTokenizer
+
     parser = argparse.ArgumentParser(
         description="Profile token lengths and batching efficiency for a training config"
     )
     parser.add_argument("--config", required=True)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--base-model", help="Local tokenizer/model path override")
     args = parser.parse_args()
 
     config = load_config(args.config)
     stage = config["stage"]
-    rows = load_stage_rows(config["train_file"], stage)
+    training = config["training"]
+    prompt_completion = bool(training.get("prompt_completion", False))
+    append_no_think = bool(training.get("append_no_think", False))
+    rows = load_stage_rows(
+        config["train_file"],
+        stage,
+        prompt_completion=prompt_completion,
+        append_no_think=append_no_think,
+    )
     if args.limit:
         rows = rows[: args.limit]
 
-    tokenizer = AutoTokenizer.from_pretrained(config["base_model"], use_fast=True)
+    tokenizer_source = args.base_model or config["base_model"]
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, use_fast=True)
     if stage == "sft":
         ensure_assistant_mask_chat_template(
             tokenizer,
             bool(config["training"].get("assistant_only_loss", False)),
         )
 
-    max_length = int(config["training"].get("max_length", 2048))
+    max_length = int(training.get("max_length", 2048))
     raw_lengths = [token_length(tokenizer, row, stage) for row in rows]
     lengths = [min(length, max_length) for length in raw_lengths]
     ordered = sorted(lengths)
@@ -79,6 +92,9 @@ def main() -> None:
 
     result = {
         "config": str(Path(args.config)),
+        "tokenizer": tokenizer_source,
+        "prompt_completion": prompt_completion,
+        "append_no_think": append_no_think,
         "samples": len(lengths),
         "max_length": max_length,
         "truncated_samples": sum(length > max_length for length in raw_lengths),
