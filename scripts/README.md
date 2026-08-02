@@ -6,6 +6,7 @@
 |---|---|
 | 模型下载与校验 | 见 `scripts/model/README.md` |
 | 固定版本语料下载 | `python scripts/download_training_corpus.py` |
+| 论文实验环境 | `bash scripts/setup_research_env.sh` |
 | 64 条过拟合门禁 | `bash scripts/gates/run_sft_overfit_64.sh /verified/model` |
 | 数据画像 | `python scripts/profile_dataset.py --config ...` |
 | 单卡交互试用 | `nuosu-chat --model /verified/model --adapter /adapter` |
