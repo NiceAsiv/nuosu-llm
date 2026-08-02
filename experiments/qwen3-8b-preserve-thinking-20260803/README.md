@@ -50,3 +50,15 @@ CUDA_VISIBLE_DEVICES=1,2 torchrun --standalone --nproc_per_node=2 \
 Run `scripts/download_training_corpus.py` first. Record code SHA, dependency
 lock, hardware inventory, data hashes, and full command lines in the experiment
 artifact directory before the baseline evaluation.
+
+Create the machine-readable preflight record with:
+
+```bash
+python scripts/capture_run_metadata.py \
+  --experiment-id qwen3-8b-nuosu-preserve-thinking-20260803 \
+  --output artifacts/experiments/qwen3-8b-preserve-thinking-20260803/preflight.json \
+  --input experiments/qwen3-8b-preserve-thinking-20260803/experiment.yaml \
+  --input /absolute/path/to/Qwen3-8B-b968826d/snapshot_manifest.json \
+  --input ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl \
+  --input ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
+```
