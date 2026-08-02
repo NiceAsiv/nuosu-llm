@@ -70,3 +70,15 @@ python scripts/capture_run_metadata.py \
   --input ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl \
   --input ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
 ```
+
+The model revision must also pass the executable chat-template gate:
+
+```bash
+python scripts/model/check_qwen3_template.py \
+  --tokenizer /absolute/path/to/Qwen3-8B-b968826d \
+  --output artifacts/experiments/qwen3-8b-preserve-thinking-20260803/template-gate.json
+```
+
+It verifies that thinking-mode prompts remain open for model-generated
+reasoning, while contextual `/no_think` SFT completions receive Qwen3's official
+empty `<think></think>` prefix before the supervised answer.
