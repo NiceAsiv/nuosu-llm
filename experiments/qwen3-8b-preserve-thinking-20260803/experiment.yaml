@@ -1,0 +1,85 @@
+experiment_id: qwen3-8b-nuosu-preserve-thinking-20260803
+status: preregistered_before_training
+objective: Add Standard Liangshan Yi capability while retaining Qwen3-8B reasoning behavior.
+hypotheses:
+  h1: Low-rank, low-learning-rate Nuosu adaptation improves Nuosu task performance.
+  h2: Contextual /no_think SFT retains at least 95% of the base reasoning composite.
+
+base_model:
+  repo_id: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  training_stage: pretraining_and_posttraining
+  thinking_default: true
+
+dataset:
+  repo_id: NiceAsiv/nuosu-corpus
+  revision: v2026.08.02
+  commit: 8c8b2ed5d633c21772f28291147c9d33e52daf39
+  ready_cpt:
+    records: 4238
+    sha256: c6ce1db80e5c03d878a07473da8bc1c25f7e76b1263b576e80b2a14f704f724a
+  ready_sft:
+    records: 113269
+    sha256: 5a18470b7d72e4d504130847495eafb7db43cb0670671afd5ea69f9107957e80
+  overlap_policy: Retain all usable low-resource data; disclose benchmark and same-work overlap.
+
+hardware:
+  host: gpu-SYS
+  training_gpus: [1, 2]
+  gpu_model: NVIDIA GeForce RTX 3090
+  vram_mib_per_gpu: 24576
+  reserved_gpu: 0
+  reserved_service: NuosuBburma OCR
+
+training:
+  seed: 42
+  precision: QLoRA NF4 with BF16 compute
+  trainable_modules: [q_proj, k_proj, v_proj, o_proj]
+  lora_rank: 16
+  lora_alpha: 32
+  stages:
+    - name: cpt
+      config: configs/cpt_qwen3_8b_qlora.yaml
+      epochs: 1
+      learning_rate: 1.0e-5
+    - name: sft
+      config: configs/sft_qwen3_8b_qlora.yaml
+      epochs: 1
+      learning_rate: 2.0e-5
+      loss: completion_only
+      prompt_transform: append /no_think to the final user message
+      chat_template: preserve upstream Qwen3 template
+
+comparisons:
+  - id: m0
+    model: frozen Qwen3-8B post-trained base
+  - id: m1
+    model: legacy Qwen3-8B-Base translation-focused adapter
+  - id: m2
+    model: m0 plus Nuosu CPT adapter
+  - id: m3
+    model: m2 plus contextual-no-think Nuosu SFT
+
+primary_outcomes:
+  reasoning_retention:
+    definition: adapted reasoning composite divided by m0 reasoning composite
+    non_inferiority_threshold: 0.95
+  nuosu_gain:
+    definition: change from m0 on translation, orthography, QA, and native-speaker blind ratings
+
+evaluation:
+  pre_training: [reasoning canary, public benchmark diagnostics, Nuosu diagnostics]
+  post_cpt: [reasoning canary, Nuosu language modeling diagnostics]
+  post_sft: [reasoning canary, public benchmark diagnostics, Nuosu diagnostics, native review]
+  public_reasoning_suites: [GSM8K, MMLU-Pro, IFEval]
+  reporting_rule: Report exact model/data/code revisions, confidence intervals, and all overlap caveats.
+  contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
+
+reproducibility:
+  capture_at_launch:
+    - git rev-parse HEAD
+    - pip freeze
+    - nvidia-smi -q
+    - sha256sum of model and corpus manifests
+  logs: artifacts/experiments/qwen3-8b-preserve-thinking-20260803
+  outputs_prefix: outputs/qwen3-8b-nuosu-preserve

@@ -9,6 +9,7 @@ from nuosu_llm.training import (
     initialize_distributed_runtime,
     load_stage_rows,
     require_verified_base_model,
+    to_prompt_completion,
 )
 
 
@@ -59,6 +60,28 @@ def test_sft_loader_keeps_only_messages(tmp_path):
     )
 
     assert load_stage_rows(path, "sft") == [{"messages": messages}]
+
+
+def test_prompt_completion_adds_contextual_no_think_without_mutating_source():
+    messages = [
+        {"role": "system", "content": "你是语言助手。"},
+        {"role": "user", "content": "翻译成彝文：你好"},
+        {"role": "assistant", "content": "ꀋꉬ"},
+    ]
+
+    converted = to_prompt_completion(messages, append_no_think=True)
+
+    assert converted["prompt"][-1]["content"].endswith("/no_think")
+    assert converted["completion"] == [{"role": "assistant", "content": "ꀋꉬ"}]
+    assert messages[-2]["content"] == "翻译成彝文：你好"
+
+
+def test_prompt_completion_requires_final_assistant():
+    with pytest.raises(ValueError, match="最后一条消息为 assistant"):
+        to_prompt_completion(
+            [{"role": "user", "content": "只有问题"}],
+            append_no_think=True,
+        )
 
 
 def test_loader_rejects_missing_stage_field(tmp_path):

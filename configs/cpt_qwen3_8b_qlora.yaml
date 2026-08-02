@@ -1,10 +1,11 @@
 stage: cpt
-base_model: Qwen/Qwen3-8B-Base
+base_model: Qwen/Qwen3-8B
 train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl
-output_dir: outputs/qwen3-8b-cpt-qlora
+output_dir: outputs/qwen3-8b-nuosu-preserve-cpt
 seed: 42
 data_revision: v2026.08.02
-data_policy: all_usable_nuosu_cpt
+base_model_revision: b968826d9c46dd6066d109eabc6255188de91218
+data_policy: all_usable_nuosu_cpt_low_drift
 
 quantization:
   enabled: true
@@ -14,10 +15,14 @@ quantization:
   compute_dtype: bfloat16
 
 lora:
-  r: 32
-  alpha: 64
+  r: 16
+  alpha: 32
   dropout: 0.05
-  target_modules: all-linear
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
   bias: none
 
 training:
@@ -27,14 +32,14 @@ training:
   per_device_eval_batch_size: 1
   gradient_accumulation_steps: 16
   gradient_checkpointing: true
-  learning_rate: 0.0001
+  learning_rate: 0.00001
   num_train_epochs: 1
   warmup_ratio: 0.03
   weight_decay: 0.01
   lr_scheduler_type: cosine
   logging_steps: 10
   eval_steps: 250
-  save_steps: 250
+  save_steps: 100
   save_total_limit: 3
   bf16: true
   fp16: false

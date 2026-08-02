@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -60,7 +61,33 @@ def initialize_distributed_runtime(torch: Any, local_rank: int, world_size: int)
         )
 
 
-def load_stage_rows(path: str | Path, stage: str) -> list[dict[str, Any]]:
+def to_prompt_completion(
+    messages: list[dict[str, Any]], *, append_no_think: bool
+) -> dict[str, list[dict[str, Any]]]:
+    """Preserve Qwen3's official thinking template while masking prompt loss."""
+    copied = deepcopy(messages)
+    if not copied or copied[-1].get("role") != "assistant":
+        raise ValueError("prompt/completion SFT 要求最后一条消息为 assistant")
+    if append_no_think:
+        for message in reversed(copied[:-1]):
+            if message.get("role") != "user":
+                continue
+            content = str(message.get("content") or "").rstrip()
+            if "/no_think" not in content:
+                message["content"] = f"{content}\n\n/no_think"
+            break
+        else:
+            raise ValueError("prompt/completion SFT 缺少 user 消息")
+    return {"prompt": copied[:-1], "completion": copied[-1:]}
+
+
+def load_stage_rows(
+    path: str | Path,
+    stage: str,
+    *,
+    prompt_completion: bool = False,
+    append_no_think: bool = False,
+) -> list[dict[str, Any]]:
     """Load only trainer-facing fields so heterogeneous metadata cannot break Arrow."""
     if stage not in {"cpt", "sft"}:
         raise ValueError(f"不支持的训练阶段: {stage}")
@@ -79,7 +106,12 @@ def load_stage_rows(path: str | Path, stage: str) -> list[dict[str, Any]]:
                 raise ValueError(f"{path}:{line_number}: CPT 记录缺少非空 text")
             if stage == "sft" and (not isinstance(value, list) or not value):
                 raise ValueError(f"{path}:{line_number}: SFT 记录缺少非空 messages")
-            rows.append({field: value})
+            if stage == "sft" and prompt_completion:
+                rows.append(
+                    to_prompt_completion(value, append_no_think=append_no_think)
+                )
+            else:
+                rows.append({field: value})
     if not rows:
         raise ValueError(f"{path}: 没有可用的 {stage.upper()} 记录")
     return rows
@@ -122,6 +154,9 @@ def run_training(config: dict[str, Any]) -> None:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     gradient_checkpointing = bool(training.get("gradient_checkpointing", True))
     assistant_only_loss = bool(training.get("assistant_only_loss", False))
+    completion_only_loss = bool(training.get("completion_only_loss", False))
+    prompt_completion = bool(training.get("prompt_completion", False))
+    append_no_think = bool(training.get("append_no_think", False))
     initialize_distributed_runtime(torch, local_rank, world_size)
 
     quantization_config = None
@@ -171,12 +206,20 @@ def run_training(config: dict[str, Any]) -> None:
             is_trainable=True,
         )
 
+    loader_kwargs = {
+        "prompt_completion": prompt_completion,
+        "append_no_think": append_no_think,
+    }
     dataset_splits = {
-        "train": Dataset.from_list(load_stage_rows(config["train_file"], stage))
+        "train": Dataset.from_list(
+            load_stage_rows(config["train_file"], stage, **loader_kwargs)
+        )
     }
     eval_path = config.get("eval_file")
     if eval_path and Path(eval_path).exists():
-        dataset_splits["eval"] = Dataset.from_list(load_stage_rows(eval_path, stage))
+        dataset_splits["eval"] = Dataset.from_list(
+            load_stage_rows(eval_path, stage, **loader_kwargs)
+        )
     datasets = DatasetDict(dataset_splits)
 
     lora = config["lora"]
@@ -205,6 +248,7 @@ def run_training(config: dict[str, Any]) -> None:
         padding_free=bool(training.get("padding_free", False)),
         eval_packing=training.get("eval_packing"),
         assistant_only_loss=assistant_only_loss,
+        completion_only_loss=completion_only_loss,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=int(training.get("per_device_eval_batch_size", 1)),
         gradient_accumulation_steps=accumulation_steps,
@@ -261,6 +305,11 @@ def run_training(config: dict[str, Any]) -> None:
             "packing": sft_args.packing,
             "packing_strategy": sft_args.packing_strategy,
             "group_by_length": sft_args.group_by_length,
+            "assistant_only_loss": assistant_only_loss,
+            "completion_only_loss": completion_only_loss,
+            "prompt_completion": prompt_completion,
+            "append_no_think": append_no_think,
+            "preserves_original_chat_template": not assistant_only_loss,
             "attention": attn_implementation or "model_default",
         }
         print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))

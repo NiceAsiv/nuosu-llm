@@ -28,8 +28,18 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ConfigError(f"缺少配置项: {', '.join(missing)}")
     if config["stage"] not in {"cpt", "sft"}:
         raise ConfigError("stage 必须是 cpt 或 sft")
-    if config["stage"] == "sft" and not config["training"].get("assistant_only_loss", False):
-        raise ConfigError("SFT 默认要求 assistant_only_loss: true")
+    if config["stage"] == "sft":
+        training = config["training"]
+        assistant_only = bool(training.get("assistant_only_loss", False))
+        completion_only = bool(training.get("completion_only_loss", False))
+        if assistant_only == completion_only:
+            raise ConfigError(
+                "SFT 必须且只能启用 assistant_only_loss 或 completion_only_loss 之一"
+            )
+        if completion_only and not training.get("prompt_completion", False):
+            raise ConfigError(
+                "completion_only_loss 要求 prompt_completion: true"
+            )
 
 
 def with_overrides(
