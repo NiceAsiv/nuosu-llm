@@ -10,6 +10,7 @@ from nuosu_llm.training import (
     load_stage_rows,
     require_verified_base_model,
     to_prompt_completion,
+    training_sampling_strategy_name,
 )
 
 
@@ -28,6 +29,11 @@ def test_distributed_runtime_is_noop_without_cuda():
         cuda = Cuda()
 
     initialize_distributed_runtime(Torch(), local_rank=0, world_size=3)
+
+
+def test_training_sampling_strategy_is_resolved_without_trl_config_attribute():
+    assert training_sampling_strategy_name(False) == "random"
+    assert training_sampling_strategy_name(True) == "group_by_length"
 
 
 def test_cpt_loader_ignores_heterogeneous_metadata(tmp_path):

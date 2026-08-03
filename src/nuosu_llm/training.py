@@ -61,6 +61,11 @@ def initialize_distributed_runtime(torch: Any, local_rank: int, world_size: int)
         )
 
 
+def training_sampling_strategy_name(group_by_length: bool) -> str:
+    """Resolve the sampler label without relying on optional TRL attributes."""
+    return "group_by_length" if group_by_length else "random"
+
+
 def to_prompt_completion(
     messages: list[dict[str, Any]], *, append_no_think: bool
 ) -> dict[str, list[dict[str, Any]]]:
@@ -288,8 +293,9 @@ def run_training(config: dict[str, Any]) -> None:
     )
     if stage == "cpt":
         sft_kwargs["dataset_text_field"] = "text"
+    train_sampling_strategy = training_sampling_strategy_name(group_by_length)
     if group_by_length:
-        sft_kwargs["train_sampling_strategy"] = "group_by_length"
+        sft_kwargs["train_sampling_strategy"] = train_sampling_strategy
     if dataloader_workers > 0:
         sft_kwargs["dataloader_prefetch_factor"] = int(
             training.get("dataloader_prefetch_factor", 2)
@@ -308,7 +314,10 @@ def run_training(config: dict[str, Any]) -> None:
             "packing": sft_args.packing,
             "packing_strategy": sft_args.packing_strategy,
             "group_by_length": group_by_length,
-            "train_sampling_strategy": sft_args.train_sampling_strategy,
+            # TRL 0.29 does not expose this as an SFTConfig attribute when the
+            # default random sampler is used.  Report the resolved local value
+            # instead of coupling provenance logging to an optional attribute.
+            "train_sampling_strategy": train_sampling_strategy,
             "assistant_only_loss": assistant_only_loss,
             "completion_only_loss": completion_only_loss,
             "prompt_completion": prompt_completion,
