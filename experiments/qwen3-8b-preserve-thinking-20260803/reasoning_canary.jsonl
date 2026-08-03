@@ -1,0 +1,8 @@
+{"id":"reasoning-en-arithmetic-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"Compute 17 × 23. Show your reasoning, then give the final integer."}],"reference":"391"}
+{"id":"reasoning-en-rate-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"A train travels 180 km at a constant speed of 60 km/h. How many hours does the trip take? Explain briefly."}],"reference":"3"}
+{"id":"reasoning-en-logic-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"All Zorbs are Plins. No Plins are Mavs. Can any Zorb be a Mav? Explain."}],"reference":"No"}
+{"id":"reasoning-en-sequence-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"Find the next term and explain the pattern: 2, 6, 12, 20, 30, ?"}],"reference":"42"}
+{"id":"reasoning-zh-age-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"父亲42岁，儿子14岁。多少年后父亲年龄正好是儿子的两倍？请列式推理。"}],"reference":"14年后"}
+{"id":"reasoning-zh-probability-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"掷两枚公平六面骰子，点数和为7的概率是多少？请说明计算过程。"}],"reference":"1/6"}
+{"id":"reasoning-code-python-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"What does this Python expression return, and why? sum(i*i for i in range(5))"}],"reference":"30"}
+{"id":"reasoning-zh-constraint-001","benchmark":"reasoning-canary","messages":[{"role":"user","content":"有三只盒子，标签分别写着“苹果”“橙子”“混合”，但三个标签全错。只允许从一个盒子取出一个水果，怎样确定全部盒子的正确标签？"}],"reference":"从标有“混合”的盒子取一个水果"}

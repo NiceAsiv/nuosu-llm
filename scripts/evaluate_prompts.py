@@ -133,6 +133,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use the saved chat template or the final user content as a raw completion prompt",
     )
     parser.add_argument(
+        "--thinking-mode",
+        choices=("thinking", "no_think", "template_default"),
+        default="template_default",
+        help="Explicitly control Qwen3 thinking in the official chat template",
+    )
+    parser.add_argument(
         "--load-in-4bit",
         action="store_true",
         help="Load the base model with the same NF4 quantization used by QLoRA training",
@@ -203,11 +209,17 @@ def main() -> None:
         for offset in range(0, len(pending), args.batch_size):
             batch = pending[offset : offset + args.batch_size]
             if args.prompt_format == "chat":
+                template_kwargs = {}
+                if args.thinking_mode != "template_default":
+                    template_kwargs["enable_thinking"] = (
+                        args.thinking_mode == "thinking"
+                    )
                 prompts = [
                     tokenizer.apply_chat_template(
                         record["messages"],
                         add_generation_prompt=True,
                         tokenize=False,
+                        **template_kwargs,
                     )
                     for record in batch
                 ]
@@ -317,6 +329,7 @@ def main() -> None:
             "dtype": "bfloat16",
             "load_in_4bit": args.load_in_4bit,
             "prompt_format": args.prompt_format,
+            "thinking_mode": args.thinking_mode,
             "eos_token_ids": generation_eos_token_id,
         }
         output_path.with_suffix(".manifest.json").write_text(

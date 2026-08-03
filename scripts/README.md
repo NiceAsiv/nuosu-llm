@@ -5,6 +5,8 @@
 | 阶段 | 命令 |
 |---|---|
 | 模型下载与校验 | 见 `scripts/model/README.md` |
+| 固定版本语料下载 | `python scripts/download_training_corpus.py` |
+| 论文实验环境 | `bash scripts/setup_research_env.sh` |
 | 64 条过拟合门禁 | `bash scripts/gates/run_sft_overfit_64.sh /verified/model` |
 | 数据画像 | `python scripts/profile_dataset.py --config ...` |
 | 单卡交互试用 | `nuosu-chat --model /verified/model --adapter /adapter` |
@@ -25,3 +27,6 @@
 
 每个命令均支持 `--help`。自动化脚本必须在 README 中说明是否会移动文件、启动 GPU
 任务或写入外部系统。
+
+`download_training_corpus.py` 只从公开的 Hugging Face Dataset 下载
+`NiceAsiv/nuosu-corpus@v2026.08.02`，并用该版本 `manifest.json` 校验 CPT/SFT 文件哈希。

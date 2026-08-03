@@ -14,6 +14,7 @@ from scripts.score_evaluation import (
     compact_text,
     infer_target_language,
     score_rows,
+    thinking_span,
 )
 
 
@@ -93,6 +94,11 @@ def test_normalization_and_basic_metrics():
     assert character_error_rate("abc", "abc") == 0.0
     assert character_error_rate("abc", "axc") == 1 / 3
     assert chrf2("ꀀꁌꂷ", "ꀀꁌꂷ") == 100.0
+    assert thinking_span("<think> 2 + 2 = 4 </think>4") == "2 + 2 = 4"
+    assert thinking_span("reasoning without opener</think>answer") == (
+        "reasoning without opener"
+    )
+    assert thinking_span("answer only") is None
 
 
 def test_target_language_inference():
@@ -148,5 +154,6 @@ def test_score_rows_reports_language_groups():
     assert metrics["overall"]["compact_exact_match"] == 1.0
     assert metrics["overall"]["length_truncation_rate"] == 0.5
     assert metrics["overall"]["replacement_character_rate"] == 0.0
+    assert metrics["overall"]["thinking_terminated_rate"] == 0.0
     assert metrics["by_target_language"]["yi"]["yi_exact_match"] == 1.0
     assert metrics["by_target_language"]["zh"]["records"] == 1

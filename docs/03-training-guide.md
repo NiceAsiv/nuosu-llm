@@ -154,11 +154,11 @@ world_size × per_device_train_batch_size × gradient_accumulation_steps
 
 ```bash
 python scripts/profile_dataset.py \
-  --config configs/sft_qwen3_8b_dictionary_research.yaml \
+  --config configs/sft_qwen3_8b_qlora.yaml \
   --batch-size 32
 
 bash scripts/benchmark_throughput.sh \
-  configs/sft_qwen3_8b_dictionary_research.yaml \
+  configs/sft_qwen3_8b_qlora.yaml \
   30 \
   outputs/previous-adapter-or-checkpoint
 ```
@@ -180,9 +180,9 @@ bash scripts/benchmark_throughput.sh \
 
 ```bash
 python scripts/bucket_sft_by_length.py \
-  --config configs/sft_qwen3_8b_bootstrap.yaml \
+  --config configs/sft_qwen3_8b_qlora.yaml \
   --threshold 512 \
-  --output-dir ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets
+  --output-dir artifacts/ready_sft_length_buckets
 ```
 
 短阶段和长阶段必须沿用同一 adapter；不能把两个阶段各自从基础模型开始后再尝试合并。

@@ -1,0 +1,126 @@
+experiment_id: qwen3-8b-nuosu-preserve-thinking-20260803
+status: preregistered_before_training
+objective: Add Standard Liangshan Yi capability while retaining Qwen3-8B reasoning behavior.
+study_phase: development_run_before_confirmatory_replication
+hypotheses:
+  h1: Low-rank, low-learning-rate Nuosu adaptation improves Nuosu task performance.
+  h2: Contextual /no_think SFT retains at least 95% of the base reasoning composite.
+
+base_model:
+  repo_id: Qwen/Qwen3-8B
+  revision: b968826d9c46dd6066d109eabc6255188de91218
+  training_stage: pretraining_and_posttraining
+  thinking_default: true
+  acquisition:
+    endpoint: https://hf-mirror.com
+    reason: The training host timed out connecting to huggingface.co on 2026-08-03.
+    identity_verification: Fixed repository revision plus per-file SHA-256 manifest.
+
+dataset:
+  repo_id: NiceAsiv/nuosu-corpus
+  revision: v2026.08.02
+  commit: 8c8b2ed5d633c21772f28291147c9d33e52daf39
+  ready_cpt:
+    records: 4238
+    sha256: c6ce1db80e5c03d878a07473da8bc1c25f7e76b1263b576e80b2a14f704f724a
+    derived_training_view:
+      transform: contiguous lossless character spans bounded to 2048 Qwen3 tokens
+      overlap_tokens: 0
+      reason: Direct per-record truncation would discard 879097 of 3663047 CPT tokens.
+      manifest: artifacts/experiments/qwen3-8b-preserve-thinking-20260803/derived/ready_cpt.chunks.jsonl.manifest.json
+  ready_sft:
+    records: 113269
+    sha256: 5a18470b7d72e4d504130847495eafb7db43cb0670671afd5ea69f9107957e80
+  overlap_policy: Retain all usable low-resource data; disclose benchmark and same-work overlap.
+
+hardware:
+  host: gpu-SYS
+  training_gpus: [1, 2]
+  gpu_model: NVIDIA GeForce RTX 3090
+  vram_mib_per_gpu: 24576
+  reserved_gpu: 0
+  reserved_service: NuosuBburma OCR
+
+training:
+  seed: 42
+  precision: QLoRA NF4 with BF16 compute
+  sequence_batching:
+    packing: false
+    attention_implementation: sdpa
+    reason: TRL 0.29 packing requires a supported FlashAttention backend to prevent cross-example attention; the host has neither flash_attn nor nvcc.
+  trainable_modules: [q_proj, k_proj, v_proj, o_proj]
+  lora_rank: 16
+  lora_alpha: 32
+  stages:
+    - name: cpt
+      config: configs/cpt_qwen3_8b_qlora.yaml
+      epochs: 1
+      learning_rate: 1.0e-5
+    - name: sft
+      config: configs/sft_qwen3_8b_qlora.yaml
+      epochs: 1
+      learning_rate: 2.0e-5
+      loss: completion_only
+      prompt_transform: append /no_think to the final user message
+      chat_template: preserve upstream Qwen3 template
+
+replication_plan:
+  development_run_seed: 42
+  confirmatory_seeds: [42, 43, 44]
+  selection_rule: Freeze the selected CPT/SFT path and all hyperparameters before confirmatory repeats.
+  aggregate_reporting: Report each seed, mean and standard deviation across seeds, and item-level bootstrap confidence intervals.
+  current_scope: This launch executes only the development run; it is not by itself sufficient for a stability claim.
+
+comparisons:
+  - id: m0
+    model: frozen Qwen3-8B post-trained base
+  - id: m1
+    model: legacy Qwen3-8B-Base translation-focused adapter
+  - id: m2
+    model: m0 plus Nuosu CPT adapter
+  - id: m3
+    model: selected SFT path under the preregistered CPT safety rule
+
+stage_gate:
+  after_cpt:
+    metrics:
+      answer_retention: reference-contained accuracy relative to m0, threshold 0.95
+      thinking_structure: nonempty terminated thinking rate no more than 0.05 below m0
+    pass_condition: Both metrics pass after manual inspection of all eight responses.
+    pass_action: Initialize contextual-no-think SFT from the m2 CPT adapter.
+    fail_action: Do not propagate the CPT adapter; initialize SFT directly from m0.
+    interpretation: The canary is an operational safety gate, not a paper-level efficacy endpoint.
+
+primary_outcomes:
+  reasoning_retention:
+    definition: adapted reasoning composite divided by m0 reasoning composite
+    non_inferiority_threshold: 0.95
+  nuosu_gain:
+    definition: change from m0 on translation, orthography, QA, and native-speaker blind ratings
+
+evaluation:
+  pre_training: [reasoning canary, public benchmark diagnostics, Nuosu diagnostics]
+  post_cpt: [reasoning canary, Nuosu language modeling diagnostics]
+  post_sft: [reasoning canary, public benchmark diagnostics, Nuosu diagnostics, native review]
+  public_reasoning_suites: [GSM8K, MMLU-Pro, IFEval]
+  reporting_rule: Report exact model/data/code revisions, confidence intervals, and all overlap caveats.
+  canary_scope: Operational regression detection only; never use eight canary items as the formal reasoning claim.
+  test_access_rule: Freeze the final recipe before formal hidden or native-speaker test scoring.
+  reasoning_canary_generation:
+    thinking_mode: true
+    do_sample: true
+    temperature: 0.6
+    top_p: 0.95
+    seed: 42
+    max_new_tokens: 8192
+    truncation_rule: Any length-truncated canary run is invalid for retention comparison and must be rerun with a sufficient fixed limit.
+  contamination_rule: NuosuBench results are diagnostic, not an uncontaminated generalization estimate.
+
+reproducibility:
+  capture_at_launch:
+    - git rev-parse HEAD
+    - pip freeze
+    - nvidia-smi -q
+    - sha256sum of model and corpus manifests
+  logs: artifacts/experiments/qwen3-8b-preserve-thinking-20260803
+  outputs_prefix: outputs/qwen3-8b-nuosu-preserve

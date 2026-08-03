@@ -113,15 +113,13 @@ python scripts/fetch_nuosu_bench.py
 
 python scripts/check_benchmark_leakage.py \
   --benchmark evaluation/nuosu_bench/test.jsonl \
-  --train ../nuosu-corpus/data/processed/cpt/train.jsonl \
-          ../nuosu-corpus/data/processed/sft/train.jsonl
+  --train ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl \
+          ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
 ```
 
-学术研究训练在 `nuosu-corpus` 中按内容 hash 固定切成 80% train、10% validation 和 10%
-internal research test。训练后使用
-`../nuosu-corpus/data/processed/bootstrap_nuosu_bench/research_test_eval.jsonl` 评测，不能直接
-把包含 assistant 答案的 SFT `internal_test.jsonl` 作为生成输入。完整 `test.jsonl` 主要用于
-未使用 NuosuBench 训练的基础模型比较。
+当前低资源策略把所有可用语料用于训练，不在发布快照中预留 validation/test。NuosuBench
+可能与训练来源发生作品级或文本级重合，因此其分数只能作为有重合披露的诊断结果，不能声称为
+无污染盲评。正式模型比较需要另行维护、未进入训练的母语者盲评集。
 
 ## 8. 上线门槛示例
 

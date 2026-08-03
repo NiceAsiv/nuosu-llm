@@ -6,6 +6,21 @@
 - `manifests/`：保存已审核 revision 的实际 SHA-256；
 - `smoke_test_base.py`：检查未训练底模的基本生成。
 
+`download_snapshot.py` 下载完成后会为全部模型文件生成
+`snapshot_manifest.json` 和 `VERIFIED.sha256`，记录仓库、固定 revision、文件大小及
+实际 SHA-256。训练入口只接受带该校验标记的目录。
+
+保留 thinking 能力的 8B 实验使用官方后训练模型，而不是 Base：
+
+```bash
+MODEL_DIR=/absolute/path/to/models/Qwen3-8B-b968826d
+python scripts/model/download_snapshot.py \
+  --repo-id Qwen/Qwen3-8B \
+  --revision b968826d9c46dd6066d109eabc6255188de91218 \
+  --output-dir "${MODEL_DIR}"
+(cd "${MODEL_DIR}" && sha256sum --check VERIFIED.sha256)
+```
+
 ```bash
 MODEL_DIR=/absolute/path/to/models/Qwen3-8B-Base-49e3418fbbbc
 python scripts/model/download_snapshot.py \

@@ -9,6 +9,8 @@ from nuosu_llm.training import (
     initialize_distributed_runtime,
     load_stage_rows,
     require_verified_base_model,
+    to_prompt_completion,
+    training_sampling_strategy_name,
 )
 
 
@@ -27,6 +29,11 @@ def test_distributed_runtime_is_noop_without_cuda():
         cuda = Cuda()
 
     initialize_distributed_runtime(Torch(), local_rank=0, world_size=3)
+
+
+def test_training_sampling_strategy_is_resolved_without_trl_config_attribute():
+    assert training_sampling_strategy_name(False) == "random"
+    assert training_sampling_strategy_name(True) == "group_by_length"
 
 
 def test_cpt_loader_ignores_heterogeneous_metadata(tmp_path):
@@ -59,6 +66,28 @@ def test_sft_loader_keeps_only_messages(tmp_path):
     )
 
     assert load_stage_rows(path, "sft") == [{"messages": messages}]
+
+
+def test_prompt_completion_adds_contextual_no_think_without_mutating_source():
+    messages = [
+        {"role": "system", "content": "你是语言助手。"},
+        {"role": "user", "content": "翻译成彝文：你好"},
+        {"role": "assistant", "content": "ꀋꉬ"},
+    ]
+
+    converted = to_prompt_completion(messages, append_no_think=True)
+
+    assert converted["prompt"][-1]["content"].endswith("/no_think")
+    assert converted["completion"] == [{"role": "assistant", "content": "ꀋꉬ"}]
+    assert messages[-2]["content"] == "翻译成彝文：你好"
+
+
+def test_prompt_completion_requires_final_assistant():
+    with pytest.raises(ValueError, match="最后一条消息为 assistant"):
+        to_prompt_completion(
+            [{"role": "user", "content": "只有问题"}],
+            append_no_think=True,
+        )
 
 
 def test_loader_rejects_missing_stage_field(tmp_path):

@@ -56,20 +56,12 @@ run_stage() {
 }
 
 run_stage \
-  cpt-ocr-gt \
-  recipes/qwen3-1.7b-full/01-cpt-ocr-gt.yaml \
-  outputs/qwen3-1.7b-nuosu-ocr-gt-cpt
+  cpt-corpus \
+  recipes/qwen3-1.7b-full/01-cpt-corpus.yaml \
+  outputs/qwen3-1.7b-nuosu-cpt
 run_stage \
-  sft-dictionary \
-  recipes/qwen3-1.7b-full/02-sft-dictionary.yaml \
-  outputs/qwen3-1.7b-nuosu-dictionary-sft
-run_stage \
-  sft-nuosubench-short \
-  recipes/qwen3-1.7b-full/03-sft-nuosubench-short.yaml \
-  outputs/qwen3-1.7b-nuosu-nuosubench-short-sft
-run_stage \
-  sft-nuosubench-long-tail \
-  recipes/qwen3-1.7b-full/04-sft-nuosubench-long-tail.yaml \
-  outputs/qwen3-1.7b-nuosu-nuosubench-sft
+  sft-corpus \
+  recipes/qwen3-1.7b-full/02-sft-corpus.yaml \
+  outputs/qwen3-1.7b-nuosu-sft
 
-echo "pipeline completed; evaluate validation data before using the held-out test"
+echo "pipeline completed; evaluate with a separately maintained blind evaluation set"

@@ -1,13 +1,11 @@
-stage: sft
+stage: cpt
 base_model: Qwen/Qwen3-1.7B-Base
-init_adapter: outputs/qwen3-1.7b-nuosu-nuosubench-short-sft
-train_file: ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets/train_long.jsonl
-eval_file: ../nuosu-corpus/data/processed/bootstrap_nuosu_bench_length_buckets/validation_long.jsonl
-output_dir: outputs/qwen3-1.7b-nuosu-nuosubench-sft
+train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl
+output_dir: outputs/qwen3-1.7b-nuosu-cpt
 seed: 42
 
-# These are longer benchmark-derived rows, not a dedicated dialogue corpus.
-data_policy: academic_research_split_from_nuosu_bench
+data_revision: v2026.08.02
+data_policy: all_usable_nuosu_cpt
 
 quantization:
   enabled: false
@@ -21,21 +19,21 @@ lora:
   bias: none
 
 training:
-  max_length: 4096
-  packing: false
-  assistant_only_loss: true
-  per_device_train_batch_size: 1
-  per_device_eval_batch_size: 1
-  gradient_accumulation_steps: 2
+  max_length: 2048
+  packing: true
+  assistant_only_loss: false
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 4
   gradient_checkpointing: true
-  learning_rate: 0.00004
-  num_train_epochs: 1
+  learning_rate: 0.00005
+  num_train_epochs: 3
   warmup_ratio: 0.03
   weight_decay: 0.01
   lr_scheduler_type: cosine
   logging_steps: 10
-  eval_steps: 50
-  save_steps: 50
+  eval_steps: 250
+  save_steps: 250
   save_total_limit: 2
   bf16: true
   fp16: false
