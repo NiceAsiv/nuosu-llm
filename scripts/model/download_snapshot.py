@@ -6,8 +6,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
-
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -70,6 +68,8 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--force-download", action="store_true")
     args = parser.parse_args()
+
+    from huggingface_hub import snapshot_download
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = snapshot_download(
