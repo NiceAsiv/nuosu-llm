@@ -1,36 +1,57 @@
 # Nuosu LLM
 
 [![CI](https://github.com/NiceAsiv/nuosu-llm/actions/workflows/ci.yml/badge.svg)](https://github.com/NiceAsiv/nuosu-llm/actions/workflows/ci.yml)
-[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face-yellow)](https://huggingface.co/NiceAsiv)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-NiceAsiv-yellow)](https://huggingface.co/NiceAsiv)
 
-面向凉山规范彝文（诺苏语）的可复现训练与评测工具。
+面向凉山规范彝文（诺苏语）的可复现大语言模型适配、评测与发布工具。
 
-> **当前状态（2026-08-02）**
->
-> 第一轮实验使用了内容损坏的 `Qwen3-8B-Base` 缓存，因此该轮所有 adapter 和测试分数均
-> 无效，不能发布。仓库现已把模型实际 SHA-256 校验和生成冒烟测试设为训练前置门禁。
+Nuosu LLM is a reproducible toolkit for adapting and evaluating large language
+models for Standard Liangshan Yi (Nuosu). The current research line studies
+whether low-rank Nuosu adaptation can improve language capability while
+preserving the reasoning behavior of a post-trained foundation model.
 
-## 从这里开始
+## 研究概览
 
-按你的角色选择入口：
+当前开发实验以固定版本的 `Qwen/Qwen3-8B` 为起点，采用两阶段 QLoRA：
 
-| 目标 | 入口 |
+1. 使用规范彝文连续文本进行低学习率持续预训练（CPT）；
+2. 使用翻译、词典、问答等统一指令数据进行 completion-only SFT。
+
+SFT 仅在每条训练提示的最后一个用户消息中加入 `/no_think`，使短答案成为显式的上下文行为，
+而不是在模型层面全局抑制思考。训练保留 Qwen3 官方聊天模板，并在 CPT、SFT 前后执行推理
+回归门禁。
+
+| 项目 | 固定设置 |
 |---|---|
-| 第一次运行项目 | 本页的“安全快速开始” |
-| 理解项目边界与模型路线 | [`docs/01-scope-and-architecture.md`](docs/01-scope-and-architecture.md) |
-| 准备或替换语料 | sibling 仓库 [`NiceAsiv/nuosu-corpus`](https://github.com/NiceAsiv/nuosu-corpus) |
-| 选择训练配置 | [`configs/README.md`](configs/README.md) |
-| 查找命令行工具 | [`scripts/README.md`](scripts/README.md) |
-| 训练与恢复 | [`docs/03-training-guide.md`](docs/03-training-guide.md) |
-| 正式评测 | [`evaluation/README.md`](evaluation/README.md) |
-| 查看特定硬件实验 | [`experiments/README.md`](experiments/README.md) |
-| 查看事故补丁 | [`patches/README.md`](patches/README.md) |
-| 阅读失败复盘 | [`docs/07-lessons-learned.md`](docs/07-lessons-learned.md) |
-| 查看文档地图 | [`docs/README.md`](docs/README.md) |
+| 基础模型 | `Qwen/Qwen3-8B` |
+| 模型 revision | `b968826d9c46dd6066d109eabc6255188de91218` |
+| 训练语料 | `NiceAsiv/nuosu-corpus@v2026.08.02` |
+| CPT | 4,238 条，约 366 万 token；训练前无损切分至 2,048 token |
+| SFT | 113,269 条，约 664 万 token |
+| 参数高效微调 | QLoRA NF4、BF16 compute、LoRA rank 16 |
+| 当前阶段 | seed 42 开发实验；正式结论需多随机种子复现和母语者盲评 |
 
-## 安全快速开始
+训练 loss、公开基准分数或少量示例都不能单独证明彝语质量。本项目在完整评测和母语者审核
+完成前不宣称模型已经达到可部署水平。
 
-### 1. 安装
+## 项目边界
+
+本仓库负责模型下载与校验、训练、评测、adapter 检查和发布准备。语料采集、OCR 后处理、
+清洗、来源记录与 Hugging Face 数据集构建位于独立仓库
+[`NiceAsiv/nuosu-corpus`](https://github.com/NiceAsiv/nuosu-corpus)。建议将两个仓库放在同一父目录：
+
+```text
+workspace/
+├── nuosu-corpus/    # 语料采集、清洗、来源元数据与发布
+└── nuosu-llm/       # 模型训练、评测与发布
+```
+
+语言范围以1980年凉山规范彝文为核心，主要面向诺苏语北部方言、圣乍话基础方言和喜德标准音。
+本项目不宣称覆盖全部彝语支系、传统彝文或所有地方口语。
+
+## 安装
 
 ```bash
 git clone https://github.com/NiceAsiv/nuosu-corpus.git
@@ -39,251 +60,137 @@ cd nuosu-llm
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[train,dev]"
-pytest -q
+python -m pip install -U pip
+python -m pip install -e ".[train,dev]"
+python -m pytest -q
 ```
 
-两个仓库默认放在同一父目录：
-
-```text
-workspace/
-├── nuosu-corpus/    # 采集、清洗、方言标签、切分、发布
-└── nuosu-llm/       # 模型获取、训练、评测、合并、部署
-```
-
-### 2. 下载并验证基础模型
-
-下载包含 Qwen3 后训练与混合思考能力的固定 revision（不要使用仅预训练的
-`Qwen3-8B-Base` 作为本实验底模）：
+只进行代码检查时可安装轻量开发依赖：
 
 ```bash
-MODEL_DIR=/absolute/path/to/models/Qwen3-8B-b968826d
-python scripts/model/download_snapshot.py \
-  --repo-id Qwen/Qwen3-8B \
-  --revision b968826d9c46dd6066d109eabc6255188de91218 \
-  --output-dir "${MODEL_DIR}"
+python -m pip install -e ".[dev]"
+python -m ruff check .
+python -m pytest -q
 ```
 
-下载脚本会对落盘文件计算 SHA-256 并生成 `VERIFIED.sha256` 和
-`snapshot_manifest.json`。验证实际文件后再运行未训练底模冒烟：
+## 可复现训练
 
-```bash
-(cd "${MODEL_DIR}" && sha256sum --check VERIFIED.sha256)
-python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
-```
+以下命令展示当前8B开发实验的核心路径。完整的假设、门禁、随机种子与报告规则见
+[`experiments/qwen3-8b-preserve-thinking-20260803/`](experiments/qwen3-8b-preserve-thinking-20260803/)。
 
-如果已经遇到与 2026-07-29 相同的坏缓存事故，需要隔离缓存和派生 adapter，再使用
-[`patches/2026-07-29/`](patches/2026-07-29/)；正常用户不需要运行事故补丁。
-
-### 3. 下载并检查语料
-
-下载固定的 Hugging Face 数据版本并核验 `manifest.json` 中的 SHA-256：
+### 1. 下载固定语料版本
 
 ```bash
 python scripts/download_training_corpus.py
 ```
 
-默认下载 `NiceAsiv/nuosu-corpus@v2026.08.02` 中的 4,238 条 CPT 和 113,269 条 SFT，
-写入 sibling 仓库的 `data/hf/nuosu-corpus/`。训练配置不会读取 Hugging Face 的可变
-`main` 分支。
+脚本下载 `NiceAsiv/nuosu-corpus@v2026.08.02`，并根据数据集 `manifest.json` 校验
+`ready_cpt.jsonl` 和 `ready_sft.jsonl` 的记录数与 SHA-256。训练配置不会读取可变的 `main`
+分支。
+
+### 2. 下载并验证基础模型
 
 ```bash
-python scripts/profile_dataset.py \
-  --config configs/sft_qwen3_8b_qlora.yaml \
-  --batch-size 32
+MODEL_DIR=/absolute/path/to/models/Qwen3-8B-b968826d
+
+python scripts/model/download_snapshot.py \
+  --repo-id Qwen/Qwen3-8B \
+  --revision b968826d9c46dd6066d109eabc6255188de91218 \
+  --output-dir "${MODEL_DIR}"
+
+(cd "${MODEL_DIR}" && sha256sum --check VERIFIED.sha256)
+python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
+python scripts/model/check_qwen3_template.py \
+  --tokenizer "${MODEL_DIR}" \
+  --output artifacts/template-gate.json
 ```
 
-语料必须先由 `nuosu-corpus` 生成并校验。训练仓库不负责网页采集，也不应直接修改
-`data/processed`。
+训练入口只接受带有 `VERIFIED.sha256` 的本地模型目录。固定 revision、实际文件哈希和未训练
+模型生成冒烟共同防止不完整权重进入训练链。
 
-### 4. 只在门禁通过后训练
+### 3. 构建无损 CPT 训练视图
 
-训练时显式传入已经完成校验的本地模型目录：
+直接截断长记录会丢失语料。先按实际 tokenizer 将连续文本无损切分：
+
+```bash
+python scripts/chunk_cpt.py \
+  --input ../nuosu-corpus/data/hf/nuosu-corpus/ready_cpt.jsonl \
+  --output artifacts/cpt/ready_cpt.chunks.jsonl \
+  --tokenizer "${MODEL_DIR}" \
+  --max-tokens 2048 \
+  --source-revision v2026.08.02 \
+  --tokenizer-revision b968826d9c46dd6066d109eabc6255188de91218
+```
+
+生成的 manifest 会记录源文件哈希、切分数量、token 上限和字符重建检查。
+
+### 4. CPT
+
+单卡运行：
 
 ```bash
 python scripts/train.py \
   --config configs/cpt_qwen3_8b_qlora.yaml \
-  --base-model /absolute/path/to/models/Qwen3-8B-b968826d
+  --base-model "${MODEL_DIR}" \
+  --train-file artifacts/cpt/ready_cpt.chunks.jsonl
 ```
 
-正式大规模训练前还必须通过：
-
-- 64 条 SFT 过拟合测试；
-- `<|im_end|>` 正常停止；
-- 192 条 validation 生成无乱码、无大面积长度截断。
-
-只运行 64 条门禁：
+双卡运行：
 
 ```bash
-bash scripts/gates/run_sft_overfit_64.sh "${VERIFIED_MODEL}"
+CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
+  scripts/train.py \
+  --config configs/cpt_qwen3_8b_qlora.yaml \
+  --base-model "${MODEL_DIR}" \
+  --train-file artifacts/cpt/ready_cpt.chunks.jsonl
 ```
 
-默认入口不限定 GPU 数量。单卡直接运行上面的命令；多卡使用实际可用数量启动同一个
-`scripts/train.py`：
+CPT adapter 只有在固定推理 canary 的答案保持率、完整思考率和人工核查均通过后，才能传递
+给 SFT。八条 canary 只用于运行安全检查，不构成论文级推理能力结论。
+
+### 5. SFT
+
+`configs/sft_qwen3_8b_qlora.yaml` 默认从 CPT adapter 继续训练，并对113,269条记录执行一轮
+全量 completion-only SFT：
 
 ```bash
-torchrun --standalone --nproc_per_node=NUM_GPUS \
+CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
   scripts/train.py \
   --config configs/sft_qwen3_8b_qlora.yaml \
-  --base-model "${VERIFIED_MODEL}"
+  --base-model "${MODEL_DIR}"
 ```
 
-面向较小算力的 1.7B 完整配方采用两阶段路线：全量连续文本 CPT，然后使用统一
-`ready_sft.jsonl` 做全量 SFT。
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2 NUM_GPUS=3 \
-  bash recipes/qwen3-1.7b-full/run.sh \
-  /absolute/path/to/verified/Qwen3-1.7B-Base
-```
-
-配方与单卡、双卡或更多 GPU 通用，`NUM_GPUS` 决定进程数。当前数据快照不提供训练内
-validation；模型选择和最终报告应使用项目另行维护的盲评集。
-
-三张 3090 的本次配置、流水线和旧版 overnight 脚本已经隔离到
-[`experiments/three-gpu-24gb/`](experiments/three-gpu-24gb/)，仅用于复现实验。
-
-### 5. 亲自试用模型
-
-安装项目后，使用一张 GPU 启动通用交互命令：
-
-```bash
-CUDA_VISIBLE_DEVICES=0 nuosu-chat \
-  --model /absolute/path/to/verified-model \
-  --adapter outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast \
-  --tokenizer outputs/qwen3-8b-nuosu-nuosubench-sft-3gpu-fast
-```
-
-输入 `/clear` 清空多轮上下文，输入 `/quit` 退出。显存不足时可增加 `--load-in-4bit`。
-单次测试使用：
-
-```bash
-nuosu-chat \
-  --model /absolute/path/to/verified-model \
-  --adapter /absolute/path/to/adapter \
-  --prompt '请将“你好”翻译成凉山规范彝文。'
-```
-
-<img width="972" height="465" alt="image" src="https://github.com/user-attachments/assets/029221e3-7130-43a3-8f0d-4bc062e5d391" />
-
-不懂彝文的测试者只能检查空输出、乱码、重复、截断、速度和任务格式，不能据此判断翻译
-准确性。语义和规范性必须使用隐藏 reference 或母语者盲评。
-
-## 标准工作流
+不同 GPU 数量可以使用同一入口，但应重新核对有效全局 batch：
 
 ```text
-模型下载与 SHA 校验
-        ↓
-未训练底模生成冒烟
-        ↓
-64 条过拟合门禁
-        ↓
-CPT 或小规模 SFT
-        ↓
-validation 选择配置
-        ↓
-冻结配置
-        ↓
-保留测试集 + 母语者盲评
-        ↓
-发布 model card 与可复现清单
+world_size × per_device_train_batch_size × gradient_accumulation_steps
 ```
 
-任一步失败都应停止，不用更多语料或更多 epoch 掩盖基础问题。
+较小算力环境可参考 [`recipes/qwen3-1.7b-full/`](recipes/qwen3-1.7b-full/) 的1.7B两阶段配方。
 
-## 项目范围
+## 评测原则
 
-第一阶段聚焦：
+至少比较以下模型状态：
 
-- 诺苏语北部方言；
-- 圣乍话基础方言；
-- 喜德标准音；
-- 1980 年凉山规范彝文。
+- `M0`：冻结的官方后训练 Qwen3-8B；
+- `M2`：M0 + Nuosu CPT adapter；
+- `M3`：通过 CPT 门禁后完成上下文化 `/no_think` SFT 的模型。
 
-本项目不宣称覆盖全部彝语支系、传统彝文或所有地方口语。
+评测分为四类：
 
-## 数据来源
+- 彝汉翻译、规范书写、问答与指令遵循；
+- 空输出、乱码、异常重复、EOS 和长度截断；
+- GSM8K、MMLU-Pro、IFEval 等通用能力回归；
+- 母语者对正确性、流利度、规范性和幻觉的盲评。
 
-- [NiceAsiv/nuosu-corpus](https://huggingface.co/datasets/NiceAsiv/nuosu-corpus)：
-  统一的全量 CPT/SFT 训练入口，训练固定使用 `v2026.08.02`；
-- [TianYeZ1214/NuosuBench](https://huggingface.co/datasets/TianYeZ1214/NuosuBench)：
-  外部评测和重合审计，不作为本仓库训练配置的输入。
+当前低资源策略将所有可用发布语料用于训练，因此 NuosuBench 与训练来源可能存在文本级或
+作品级重合。其结果只能作为披露重合后的诊断指标，不能描述为无污染测试。论文级比较应在
+冻结训练配方后使用独立盲评集，并报告多随机种子结果、均值、标准差和置信区间。
 
-上游来源、revision、构建参数、方言标签和数据统计由 `nuosu-corpus` 管理。当前数据足以做研究
-基线，但多轮对话和母语者评测仍明显不足。
+详见 [`evaluation/README.md`](evaluation/README.md) 和
+[`docs/04-evaluation.md`](docs/04-evaluation.md)。
 
-## 仓库结构
-
-```text
-configs/              # CPT/SFT 配置；分级说明见 configs/README.md
-docs/                 # 架构、训练、评测、部署和发布文档
-evaluation/           # 评测协议与已归档报告
-experiments/          # 与特定硬件和数据快照绑定的实验
-patches/              # 按日期归档的一次性事故修复
-scripts/
-  model/              # 模型下载、校验和底模冒烟
-  gates/              # 64 条过拟合与指标门槛
-  *.py / *.sh         # 当前训练、评测和数据审计入口
-src/nuosu_llm/        # 可测试的核心 Python 代码
-tests/                # 单元测试
-```
-
-生成物统一写入被 Git 忽略的 `outputs/`、`artifacts/`、`logs/` 与
-`evaluation/results/`。
-
-## 当前实验记录
-
-已通过底模校验、训练和正式评测的实验：
-
-- [`evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu-formal.md)
-- [Qwen3-8B-Base Nuosu LoRA](https://huggingface.co/NiceAsiv/Qwen3-8B-Base-Nuosu-LoRA)
-
-损坏底模实验的结果只作为事故记录：
-
-- [`evaluation/reports/2026-07-29-qwen3-8b-nuosu.md`](evaluation/reports/2026-07-29-qwen3-8b-nuosu.md)
-
-不要上传该轮 adapter，也不要引用其分数作为模型能力。
-
-
-
-
-## Development
-
-```bash
-make help
-make test
-make lint
-```
-
-贡献新的训练配置时，必须同时说明：基础模型本地路径与 revision、模型校验记录、数据
-revision、随机种子、硬件、训练参数和 validation 结果。
-
-## English
-
-Nuosu LLM is a reproducible training and evaluation toolkit for Standard
-Liangshan Yi (Nuosu). The first experimental run is invalid because all five
-cached Base-model shards failed byte-level SHA-256 verification. The
-capability-preserving experiment now uses the post-trained `Qwen/Qwen3-8B` at a
-fixed revision, retains its official hybrid-thinking chat template, and applies
-completion-only Nuosu SFT under an explicit contextual `/no_think` instruction.
-The repository requires a quarantined download, per-file checksum verification,
-a base-generation smoke test, a reasoning regression gate, and validation
-generation before a full run.
-
-Start with the generic single-GPU entry point:
-
-```bash
-python scripts/train.py \
-  --config configs/sft_qwen3_8b_qlora.yaml \
-  --base-model /absolute/path/to/verified-model
-```
-
-See [`docs/README.md`](docs/README.md) for the documentation map and
-[`scripts/README.md`](scripts/README.md) for the command catalog. Hardware-specific
-runs are archived under [`experiments/`](experiments/), while one-off incident
-recovery tools live under [`patches/`](patches/).
-
-To try a trained adapter interactively on one GPU:
+## 使用 adapter
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 nuosu-chat \
@@ -291,6 +198,60 @@ CUDA_VISIBLE_DEVICES=0 nuosu-chat \
   --adapter /absolute/path/to/adapter
 ```
 
-Use `/clear` to reset the conversation and `/quit` to exit. Non-Nuosu speakers
-can test runtime behavior, formatting, repetition, and truncation, but semantic
-and orthographic quality requires hidden references or blind native-speaker review.
+输入 `/clear` 清空多轮上下文，输入 `/quit` 退出；显存受限时可增加 `--load-in-4bit`。
+不懂彝文的测试者可以检查运行时行为和格式，但不能代替母语者判断语义与书写规范性。
+
+## 文档与命令索引
+
+| 需求 | 文档或入口 |
+|---|---|
+| 范围与模型路线 | [`docs/01-scope-and-architecture.md`](docs/01-scope-and-architecture.md) |
+| 配置说明 | [`configs/README.md`](configs/README.md) |
+| 训练、恢复与多卡 | [`docs/03-training-guide.md`](docs/03-training-guide.md) |
+| 评测协议 | [`evaluation/README.md`](evaluation/README.md) |
+| 部署与 adapter 合并 | [`docs/05-deployment.md`](docs/05-deployment.md) |
+| 工具索引 | [`scripts/README.md`](scripts/README.md) |
+| 实验记录 | [`experiments/README.md`](experiments/README.md) |
+| 失败复盘与保护措施 | [`docs/07-lessons-learned.md`](docs/07-lessons-learned.md) |
+| 发布规范 | [`docs/09-publishing.md`](docs/09-publishing.md) |
+
+运行产物统一写入 Git 忽略的 `outputs/`、`artifacts/`、`logs/` 和
+`evaluation/results/`。一次性事故恢复工具保留在 [`patches/`](patches/)，不属于正常训练
+入口。
+
+## 开发与贡献
+
+```bash
+make test
+make lint
+```
+
+新增训练配置或实验报告时，请同时记录：
+
+- 模型 ID、revision 与逐文件校验结果；
+- 数据仓库 revision、文件哈希和样本统计；
+- 代码 commit、随机种子、依赖版本和硬件；
+- 完整训练参数、门禁结果和失败记录；
+- 数据重合、评测限制与人工审核协议。
+
+## 引用
+
+如果本仓库对你的研究有帮助，请引用：
+
+```bibtex
+@software{axi2026nuosullm,
+  author      = {Wuhe Axi},
+  title       = {Nuosu LLM: Reproducible Adaptation and Evaluation for Standard Liangshan Yi},
+  year        = {2026},
+  institution = {Xi'an Jiaotong University},
+  url         = {https://github.com/NiceAsiv/nuosu-llm}
+}
+```
+
+语料使用还应单独引用 [`NiceAsiv/nuosu-corpus`](https://github.com/NiceAsiv/nuosu-corpus)
+及其列出的原始资料。
+
+## 许可证
+
+代码以 [Apache License 2.0](LICENSE) 发布。模型、语料和第三方资料可能适用各自的许可证
+与使用条件；发布或再分发前请分别核对。
