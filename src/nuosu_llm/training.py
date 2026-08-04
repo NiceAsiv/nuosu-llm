@@ -92,6 +92,7 @@ def load_stage_rows(
     *,
     prompt_completion: bool = False,
     append_no_think: bool = False,
+    repeat_by_task: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Load only trainer-facing fields so heterogeneous metadata cannot break Arrow."""
     if stage not in {"cpt", "sft"}:
@@ -111,12 +112,20 @@ def load_stage_rows(
                 raise ValueError(f"{path}:{line_number}: CPT 记录缺少非空 text")
             if stage == "sft" and (not isinstance(value, list) or not value):
                 raise ValueError(f"{path}:{line_number}: SFT 记录缺少非空 messages")
-            if stage == "sft" and prompt_completion:
-                rows.append(
-                    to_prompt_completion(value, append_no_think=append_no_think)
-                )
-            else:
-                rows.append({field: value})
+            repeat = 1
+            if stage == "sft" and repeat_by_task:
+                task = str(record.get("task") or "")
+                repeat = repeat_by_task.get(task, 1)
+                if not isinstance(repeat, int) or repeat < 1:
+                    raise ValueError(
+                        f"{path}:{line_number}: task {task!r} 的重复次数必须是正整数"
+                    )
+            trainer_row = (
+                to_prompt_completion(value, append_no_think=append_no_think)
+                if stage == "sft" and prompt_completion
+                else {field: value}
+            )
+            rows.extend(deepcopy(trainer_row) for _ in range(repeat))
     if not rows:
         raise ValueError(f"{path}: 没有可用的 {stage.upper()} 记录")
     return rows
@@ -162,6 +171,10 @@ def run_training(config: dict[str, Any]) -> None:
     completion_only_loss = bool(training.get("completion_only_loss", False))
     prompt_completion = bool(training.get("prompt_completion", False))
     append_no_think = bool(training.get("append_no_think", False))
+    data_sampling = config.get("data_sampling", {})
+    repeat_by_task = data_sampling.get("repeat_by_task", {})
+    if not isinstance(repeat_by_task, dict):
+        raise ValueError("data_sampling.repeat_by_task 必须是 task 到正整数的映射")
     initialize_distributed_runtime(torch, local_rank, world_size)
 
     quantization_config = None
@@ -215,10 +228,14 @@ def run_training(config: dict[str, Any]) -> None:
         "prompt_completion": prompt_completion,
         "append_no_think": append_no_think,
     }
+    train_rows = load_stage_rows(
+        config["train_file"],
+        stage,
+        repeat_by_task=repeat_by_task,
+        **loader_kwargs,
+    )
     dataset_splits = {
-        "train": Dataset.from_list(
-            load_stage_rows(config["train_file"], stage, **loader_kwargs)
-        )
+        "train": Dataset.from_list(train_rows)
     }
     eval_path = config.get("eval_file")
     if eval_path and Path(eval_path).exists():
@@ -241,6 +258,9 @@ def run_training(config: dict[str, Any]) -> None:
     report_to = training.get("report_to", "none")
     report_targets = [] if report_to in {None, "none"} else [report_to]
     eval_enabled = "eval" in datasets
+    load_best_model_at_end = bool(
+        training.get("load_best_model_at_end", eval_enabled)
+    )
     train_batch_size = int(training.get("per_device_train_batch_size", 1))
     accumulation_steps = int(training.get("gradient_accumulation_steps", 16))
     dataloader_workers = int(training.get("dataloader_num_workers", 0))
@@ -268,9 +288,11 @@ def run_training(config: dict[str, Any]) -> None:
         weight_decay=float(training.get("weight_decay", 0.01)),
         lr_scheduler_type=training.get("lr_scheduler_type", "cosine"),
         logging_steps=int(training.get("logging_steps", 10)),
-        eval_strategy="steps" if eval_enabled else "no",
+        eval_strategy=training.get(
+            "eval_strategy", "steps" if eval_enabled else "no"
+        ),
         eval_steps=int(training.get("eval_steps", 250)),
-        save_strategy="steps",
+        save_strategy=training.get("save_strategy", "steps"),
         save_steps=int(training.get("save_steps", 250)),
         save_total_limit=int(training.get("save_total_limit", 3)),
         bf16=bool(training.get("bf16", True)),
@@ -289,13 +311,22 @@ def run_training(config: dict[str, Any]) -> None:
         ),
         optim=training.get("optim", "adamw_torch"),
         max_steps=int(training.get("max_steps", -1)),
+        load_best_model_at_end=load_best_model_at_end,
+        metric_for_best_model=(
+            training.get("metric_for_best_model", "eval_loss")
+            if load_best_model_at_end
+            else None
+        ),
+        greater_is_better=(
+            bool(training.get("greater_is_better", False))
+            if load_best_model_at_end
+            else None
+        ),
         report_to=report_targets,
     )
     if stage == "cpt":
         sft_kwargs["dataset_text_field"] = "text"
     train_sampling_strategy = training_sampling_strategy_name(group_by_length)
-    if group_by_length:
-        sft_kwargs["train_sampling_strategy"] = train_sampling_strategy
     if dataloader_workers > 0:
         sft_kwargs["dataloader_prefetch_factor"] = int(
             training.get("dataloader_prefetch_factor", 2)
@@ -322,6 +353,9 @@ def run_training(config: dict[str, Any]) -> None:
             "completion_only_loss": completion_only_loss,
             "prompt_completion": prompt_completion,
             "append_no_think": append_no_think,
+            "train_rows_after_sampling": len(train_rows),
+            "eval_rows": len(datasets.get("eval", [])),
+            "repeat_by_task": repeat_by_task,
             "preserves_original_chat_template": not assistant_only_loss,
             "attention": attn_implementation or "model_default",
         }

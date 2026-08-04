@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "${SCRIPT_DIR}/../.." && pwd)}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+export PYTHONPATH="${PROJECT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 MODEL_DIR="${1:?usage: run_sft_overfit_64.sh /absolute/verified/model}"
 SOURCE_DATA="${SOURCE_DATA:-${PROJECT_DIR}/../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl}"
 GATE_DIR="${GATE_DIR:-${PROJECT_DIR}/artifacts/gates/sft-overfit-64}"
@@ -42,7 +43,12 @@ cd "${PROJECT_DIR}"
   --input "${SOURCE_DATA}" \
   --train-output "${TRAIN_FILE}" \
   --eval-output "${EVAL_FILE}" \
-  --limit 64
+  --limit 64 \
+  --balanced-tasks \
+    pronunciation_orthography \
+    terminology_translation \
+    translation \
+    single_turn_qa
 
 env \
   HF_HUB_OFFLINE=1 \
@@ -65,20 +71,18 @@ env \
 env \
   HF_HUB_OFFLINE=1 \
   TRANSFORMERS_OFFLINE=1 \
-  CUDA_VISIBLE_DEVICES=0,1,2 \
+  CUDA_VISIBLE_DEVICES=0 \
   OMP_NUM_THREADS=1 \
-  "${PYTHON_BIN}" -m torch.distributed.run \
-    --standalone \
-    --nproc_per_node=3 \
-    scripts/evaluate_prompts.py \
+  "${PYTHON_BIN}" scripts/evaluate_prompts.py \
     --model "${MODEL_DIR}" \
     --adapter "${OUTPUT_DIR}" \
     --tokenizer "${OUTPUT_DIR}" \
     --input "${EVAL_FILE}" \
     --output "${GEN_FILE}" \
-    --batch-size 8 \
-    --max-input-tokens 128 \
-    --max-new-tokens 64
+    --batch-size 4 \
+    --max-input-tokens 512 \
+    --max-new-tokens 512 \
+    --thinking-mode no_think
 
 "${PYTHON_BIN}" scripts/score_evaluation.py \
   --input "${GEN_FILE}" \

@@ -7,8 +7,13 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_REPO_ID = "NiceAsiv/nuosu-corpus"
-DEFAULT_REVISION = "v2026.08.02"
-TRAINING_FILES = ("ready_cpt.jsonl", "ready_sft.jsonl")
+DEFAULT_REVISION = "v2026.08.04"
+CORPUS_FILES = (
+    "ready_cpt.jsonl",
+    "ready_sft.jsonl",
+    "validation_sft.jsonl",
+    "research_test_eval.jsonl",
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -27,7 +32,7 @@ def verify_manifest_files(directory: str | Path) -> dict[str, dict[str, Any]]:
         raise ValueError("manifest.json 缺少 files 对象")
 
     verified: dict[str, dict[str, Any]] = {}
-    for name in TRAINING_FILES:
+    for name in CORPUS_FILES:
         metadata = declared.get(name)
         if not isinstance(metadata, dict) or not metadata.get("sha256"):
             raise ValueError(f"manifest.json 缺少 {name} 的 SHA-256")
@@ -56,7 +61,12 @@ def download_training_corpus(
 
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
-    for filename in ("manifest.json", *TRAINING_FILES, "task_catalog.json", "CITATION.cff"):
+    for filename in (
+        "manifest.json",
+        *CORPUS_FILES,
+        "task_catalog.json",
+        "CITATION.cff",
+    ):
         hf_hub_download(
             repo_id=repo_id,
             filename=filename,

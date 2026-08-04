@@ -27,11 +27,11 @@ SFT 仅在每条训练提示的最后一个用户消息中加入 `/no_think`，�
 |---|---|
 | 基础模型 | `Qwen/Qwen3-8B` |
 | 模型 revision | `b968826d9c46dd6066d109eabc6255188de91218` |
-| 训练语料 | `NiceAsiv/nuosu-corpus@v2026.08.02` |
+| 训练语料 | 改进配方：`NiceAsiv/nuosu-corpus@v2026.08.04` |
 | CPT | 4,238 条，约 366 万 token；训练前无损切分至 2,048 token |
-| SFT | 113,269 条，约 664 万 token |
-| 参数高效微调 | QLoRA NF4、BF16 compute、LoRA rank 16 |
-| 当前阶段 | seed 42 开发实验；正式结论需多随机种子复现和母语者盲评 |
+| SFT | 201,756 条训练候选；10,839 条 validation；11,171 条 research test |
+| 参数高效微调 | QLoRA NF4、BF16 compute；改进配方 LoRA rank 32、all-linear |
+| 当前阶段 | 旧 rank-16 实验未通过彝语门禁；改进配方须先通过过拟合门禁 |
 
 训练 loss、公开基准分数或少量示例都不能单独证明彝语质量。本项目在完整评测和母语者审核
 完成前不宣称模型已经达到可部署水平。
@@ -84,9 +84,9 @@ python -m pytest -q
 python scripts/download_training_corpus.py
 ```
 
-脚本下载 `NiceAsiv/nuosu-corpus@v2026.08.02`，并根据数据集 `manifest.json` 校验
-`ready_cpt.jsonl` 和 `ready_sft.jsonl` 的记录数与 SHA-256。训练配置不会读取可变的 `main`
-分支。
+脚本下载 `NiceAsiv/nuosu-corpus@v2026.08.04`，并根据数据集 `manifest.json` 校验
+训练、validation、research test 和 CPT 文件的记录数与 SHA-256。训练配置不会读取可变的
+`main` 分支。
 
 ### 2. 下载并验证基础模型
 
@@ -150,13 +150,20 @@ CPT adapter 只有在固定推理 canary 的答案保持率、完整思考率和
 
 ### 5. SFT
 
-`configs/sft_qwen3_8b_qlora.yaml` 默认从 CPT adapter 继续训练，并对113,269条记录执行一轮
-全量 completion-only SFT：
+先运行与正式训练同模板的 64 条规范字—拼音—IPA 过拟合门禁：
+
+```bash
+bash scripts/gates/run_sft_overfit_64.sh "${MODEL_DIR}"
+```
+
+门禁通过后，`configs/sft_qwen3_8b_balanced_qlora.yaml` 从 post-trained Base 新建 rank-32
+all-linear LoRA。它使用 NuosuBench 固定 train split、独立 validation、completion-only loss，
+并只通过重复采样增强读音、问答与术语任务，不删除任何训练记录：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
   scripts/train.py \
-  --config configs/sft_qwen3_8b_qlora.yaml \
+  --config configs/sft_qwen3_8b_balanced_qlora.yaml \
   --base-model "${MODEL_DIR}"
 ```
 
@@ -183,9 +190,10 @@ world_size × per_device_train_batch_size × gradient_accumulation_steps
 - GSM8K、MMLU-Pro、IFEval 等通用能力回归；
 - 母语者对正确性、流利度、规范性和幻觉的盲评。
 
-当前低资源策略将所有可用发布语料用于训练，因此 NuosuBench 与训练来源可能存在文本级或
-作品级重合。其结果只能作为披露重合后的诊断指标，不能描述为无污染测试。论文级比较应在
-冻结训练配方后使用独立盲评集，并报告多随机种子结果、均值、标准差和置信区间。
+NuosuBench 使用固定内容哈希切分：train 参与梯度更新，validation 只用于 checkpoint 选择，
+research test 只在冻结配方后测评。它们来自同一公开上游 test split，因此结果必须描述为
+“同源学术研究切分”，不能描述为官方无污染测试。论文级比较还应使用独立母语者盲评集，
+并报告多随机种子结果、均值、标准差和置信区间。
 
 详见 [`evaluation/README.md`](evaluation/README.md) 和
 [`docs/04-evaluation.md`](docs/04-evaluation.md)。

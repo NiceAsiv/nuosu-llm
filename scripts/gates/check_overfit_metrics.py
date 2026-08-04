@@ -8,8 +8,8 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(description="Enforce SFT overfit generation thresholds")
     parser.add_argument("--metrics", required=True, type=Path)
-    parser.add_argument("--min-compact-exact", type=float, default=0.5)
-    parser.add_argument("--min-chrf2", type=float, default=70.0)
+    parser.add_argument("--min-compact-exact", type=float, default=0.9)
+    parser.add_argument("--min-chrf2", type=float, default=90.0)
     parser.add_argument("--max-replacement-rate", type=float, default=0.01)
     parser.add_argument("--max-length-stop-rate", type=float, default=0.05)
     parser.add_argument(
