@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config, with_overrides
+from .tokenizer_expansion import (
+    plan_tokenizer_expansion,
+    resize_and_initialize_embeddings,
+    write_expansion_manifest,
+)
 
 QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE = (
     "{% for message in messages %}"
@@ -194,6 +199,12 @@ def run_training(config: dict[str, Any]) -> None:
     tokenizer.padding_side = "right"
     if stage == "sft":
         ensure_assistant_mask_chat_template(tokenizer, assistant_only_loss)
+    expansion_config = config.get("tokenizer_expansion", {})
+    expansion_plan = (
+        plan_tokenizer_expansion(tokenizer, expansion_config)
+        if expansion_config.get("enabled", False)
+        else None
+    )
 
     model_kwargs = {
         "quantization_config": quantization_config,
@@ -204,6 +215,13 @@ def run_training(config: dict[str, Any]) -> None:
     if attn_implementation:
         model_kwargs["attn_implementation"] = attn_implementation
     model = AutoModelForCausalLM.from_pretrained(config["base_model"], **model_kwargs)
+    if expansion_plan is not None:
+        resize_and_initialize_embeddings(
+            model,
+            tokenizer,
+            expansion_plan,
+            pad_to_multiple_of=int(expansion_config.get("pad_to_multiple_of", 64)),
+        )
     model.config.use_cache = False
 
     init_adapter = config.get("init_adapter")
@@ -253,6 +271,12 @@ def run_training(config: dict[str, Any]) -> None:
             target_modules=lora.get("target_modules", "all-linear"),
             bias=lora.get("bias", "none"),
             task_type="CAUSAL_LM",
+            trainable_token_indices=(
+                list(expansion_plan.added_token_ids)
+                if expansion_plan is not None
+                else None
+            ),
+            ensure_weight_tying=bool(expansion_plan is not None),
         )
 
     report_to = training.get("report_to", "none")
@@ -358,6 +382,9 @@ def run_training(config: dict[str, Any]) -> None:
             "repeat_by_task": repeat_by_task,
             "preserves_original_chat_template": not assistant_only_loss,
             "attention": attn_implementation or "model_default",
+            "tokenizer_expansion": (
+                expansion_plan.manifest() if expansion_plan is not None else None
+            ),
         }
         print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))
 
@@ -381,6 +408,11 @@ def run_training(config: dict[str, Any]) -> None:
     trainer.save_model(config["output_dir"])
     if trainer.is_world_process_zero():
         tokenizer.save_pretrained(config["output_dir"])
+        if expansion_plan is not None:
+            write_expansion_manifest(
+                Path(config["output_dir"]) / "tokenizer_expansion.json",
+                expansion_plan,
+            )
     if world_size > 1 and torch.distributed.is_initialized():
         torch.distributed.barrier()
         torch.distributed.destroy_process_group()

@@ -12,6 +12,23 @@ models for Standard Liangshan Yi (Nuosu). The current research line studies
 whether low-rank Nuosu adaptation can improve language capability while
 preserving the reasoning behavior of a post-trained foundation model.
 
+## 当前推荐：Qwen3-1.7B 专用翻译流水线
+
+新的速度主线使用 `Qwen/Qwen3-1.7B-Base`，把全部 1,165 个规范彝文音节和55个彝文
+部首加入 tokenizer，并只训练新增 embedding 行与 rank-64 LoRA。语料会被确定性投影为
+“源文本→纯译文”，所有无法可靠确定翻译方向或抽取目标的记录进入拒绝审计文件，不会静默
+混入训练。
+
+在三张 RTX 3090 服务器上一条命令完成数据准备、CPT、SFT、断点恢复、基础模型对照、完整
+生成式评测、自动评分和产物校验：
+
+```bash
+NUM_GPUS=3 bash recipes/qwen3-1.7b-mt/run.sh
+```
+
+流程只有生成 `artifacts/pipeline/qwen3-1.7b-mt/<run-id>/COMPLETED` 才算结束。完整配置与
+恢复规则见 [`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/)。
+
 ## 研究概览
 
 当前开发实验以固定版本的 `Qwen/Qwen3-8B` 为起点，采用两阶段 QLoRA：
@@ -173,7 +190,8 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 world_size × per_device_train_batch_size × gradient_accumulation_steps
 ```
 
-较小算力环境可参考 [`recipes/qwen3-1.7b-full/`](recipes/qwen3-1.7b-full/) 的1.7B两阶段配方。
+专用翻译任务应使用会自动评测的
+[`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/)；旧的通用1.7B配方仅保留作历史对照。
 
 ## 评测原则
 
@@ -199,6 +217,25 @@ research test 只在冻结配方后测评。它们来自同一公开上游 test 
 [`docs/04-evaluation.md`](docs/04-evaluation.md)。
 
 ## 使用 adapter
+
+训练完成后，服务器上直接执行：
+
+```bash
+# 交互式中译彝；输入 /swap 切换为彝译中
+bash scripts/translate_1_7b.sh
+
+# 单次翻译
+bash scripts/translate_1_7b.sh --text "我今天去学校。"
+
+# 明确指定彝译中
+bash scripts/translate_1_7b.sh \
+  --source-lang ii --target-lang zh --text "ꉢꑬꆏꏃꃅꌠꊐ。"
+```
+
+安装项目后也可以使用 `nuosu-translate`，模型路径通过 `NUOSU_BASE_MODEL`、
+`NUOSU_ADAPTER` 和 `NUOSU_TOKENIZER` 设置。翻译入口采用确定性解码且不保留多轮历史。
+
+通用聊天模型仍使用：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 nuosu-chat \

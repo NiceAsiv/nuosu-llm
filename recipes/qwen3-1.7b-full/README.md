@@ -1,5 +1,9 @@
 # Qwen3-1.7B full Nuosu recipe
 
+> Historical general-purpose recipe. New machine-translation experiments should use
+> [`../qwen3-1.7b-mt/`](../qwen3-1.7b-mt/), which expands the Standard Yi vocabulary and
+> runs evaluation automatically.
+
 This recipe trains a smaller BF16 LoRA model on the pinned task-oriented corpus:
 
 1. continued pretraining on all 4,238 usable `ready_cpt.jsonl` records;

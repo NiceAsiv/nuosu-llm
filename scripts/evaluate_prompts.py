@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from nuosu_llm.tokenizer_expansion import resize_model_to_tokenizer
 from nuosu_llm.unicode_utils import yi_ratio
 
 
@@ -182,6 +183,7 @@ def main() -> None:
         )
     model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
     if args.adapter:
+        resize_model_to_tokenizer(model, tokenizer)
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
 

@@ -1,5 +1,8 @@
 # Training configuration catalog / 训练配置目录
 
+专用 MT 的当前正式配置位于 `recipes/qwen3-1.7b-mt/`。该 recipe 同时固定词表扩充、
+数据投影、CPT/SFT 和训练后自动评测；不要只运行其中一个 YAML 后将其称为完整实验。
+
 所有配置都需要一个已通过 `VERIFIED.sha256` 门禁的本地基础模型。运行时使用
 `--base-model /absolute/path/to/verified/model` 覆盖示例 Model ID。
 
