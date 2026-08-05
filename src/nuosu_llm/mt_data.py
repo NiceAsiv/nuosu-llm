@@ -192,6 +192,13 @@ def extract_target(answer: str, target_lang: str, source_text: str) -> str | Non
         return max(candidates, key=len).strip()
 
     value = answer.strip()
+    if target_lang == "ii" and contains_yi(value):
+        if not _CJK.search(value):
+            return value
+        yi_positions = [index for index, char in enumerate(value) if is_yi_syllable(char)]
+        yi_span = value[yi_positions[0] : yi_positions[-1] + 1].strip()
+        if yi_span and not _CJK.search(yi_span):
+            return yi_span
     prefixes = (
         "彝文的表达是",
         "彝文翻译为",

@@ -75,5 +75,20 @@ def test_projects_variant_chinese_translation_prompt():
     assert projected["reference"] == "先已牺牲启其头"
 
 
+def test_strips_chinese_wrapper_from_unquoted_yi_target():
+    projected, reason = project_mt_record(
+        {
+            "id": "test-4",
+            "messages": [{"role": "user", "content": "如何用彝文表达“猴瘟一代堵而牢”？"}],
+            "reference": "汉语词语“猴瘟一代堵而牢”的彝文是：ꑙꀉꋍꋏꆹ",
+        },
+        evaluation=True,
+    )
+
+    assert reason is None
+    assert projected is not None
+    assert projected["reference"] == "ꑙꀉꋍꋏꆹ"
+
+
 def test_mt_prompt_requires_supported_direction():
     assert build_mt_prompt("zh", "ii", "你好").endswith("\n你好")
