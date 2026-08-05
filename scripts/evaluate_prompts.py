@@ -271,6 +271,8 @@ def main() -> None:
                             "benchmark": record.get("benchmark"),
                             "dataset_id": record.get("dataset_id"),
                             "split": record.get("split"),
+                            "source_row": record.get("source_row"),
+                            "task": record.get("task"),
                             "messages": record["messages"],
                             "reference": record.get("reference"),
                             "response": response,
@@ -308,6 +310,10 @@ def main() -> None:
                 )
 
     if world_size > 1:
+        # Every part file is closed before this barrier, so rank 0 can merge
+        # without a second collective.  Avoiding the trailing barrier prevents
+        # healthy workers from being reported as failed when rank 0 exits first
+        # on older NCCL/kernel combinations.
         torch.distributed.barrier()
     if rank == 0:
         merged_count = merge_parts(output_path, world_size)
@@ -338,7 +344,6 @@ def main() -> None:
         )
         print(json.dumps(manifest, ensure_ascii=False), flush=True)
     if world_size > 1:
-        torch.distributed.barrier()
         torch.distributed.destroy_process_group()
 
 
