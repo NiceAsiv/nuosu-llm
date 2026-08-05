@@ -29,6 +29,10 @@ Completed stages are reused. If a stage stopped after producing a checkpoint, re
 same command resumes the latest numeric `checkpoint-*`. A partial output without a checkpoint
 is never deleted automatically.
 
+The SDPA recipe deliberately keeps packing disabled. TRL's padding-free packed batches require
+a supported FlashAttention implementation; using them with SDPA can leak attention across packed
+examples and is therefore not accepted by this pipeline.
+
 Set `EVAL_BASELINE=0` only for a recovery run where the immutable base evaluation is already
 available. The trained model is not considered complete until the final generation file,
 metrics and `COMPLETED` marker exist in `artifacts/pipeline/qwen3-1.7b-mt/<run-id>/`.

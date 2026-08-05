@@ -166,6 +166,31 @@ def run_training(config: dict[str, Any]) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
+    class CompactEmbeddingSFTTrainer(SFTTrainer):
+        """Prevent PEFT from redundantly saving full resized embedding matrices."""
+
+        def _save(
+            self,
+            output_dir: str | None = None,
+            state_dict: dict[str, Any] | None = None,
+        ) -> None:
+            if expansion_plan is None:
+                super()._save(output_dir=output_dir, state_dict=state_dict)
+                return
+            target_dir = output_dir or self.args.output_dir
+            os.makedirs(target_dir, exist_ok=True)
+            unwrapped = self.accelerator.unwrap_model(
+                self.model, keep_torch_compile=False
+            )
+            unwrapped.save_pretrained(
+                target_dir,
+                state_dict=state_dict,
+                save_embedding_layers=False,
+            )
+            if self.processing_class is not None:
+                self.processing_class.save_pretrained(target_dir)
+            torch.save(self.args, os.path.join(target_dir, "training_args.bin"))
+
     stage = config["stage"]
     quant = config.get("quantization", {})
     training = config["training"]
@@ -388,7 +413,7 @@ def run_training(config: dict[str, Any]) -> None:
         }
         print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))
 
-    trainer = SFTTrainer(
+    trainer = CompactEmbeddingSFTTrainer(
         model=model,
         args=sft_args,
         train_dataset=datasets["train"],

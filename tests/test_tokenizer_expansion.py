@@ -61,3 +61,5 @@ def test_expansion_adds_only_missing_tokens_and_keeps_old_piece_ids():
     assert len(set(plan.added_token_ids)) == 1219
     assert set(plan.old_piece_ids.values()) == {(2, 3, 4)}
     assert plan.coverage_before["standard_yi_syllables"]["single_token"] == 1
+    assert "added_token_ids" not in plan.manifest()
+    assert plan.manifest()["added_token_id_min"] == 10

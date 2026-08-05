@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unicodedata
 from collections.abc import Iterable
@@ -24,13 +25,18 @@ class TokenizerExpansionPlan:
     coverage_before: dict[str, Any]
 
     def manifest(self) -> dict[str, Any]:
+        token_digest = hashlib.sha256(
+            "\n".join(self.added_tokens).encode("utf-8")
+        ).hexdigest()
         return {
             "schema": "nuosu_tokenizer_expansion/1.0",
             "before_vocab_size": self.before_vocab_size,
             "after_vocab_size": self.after_vocab_size,
             "requested_tokens": len(self.requested_tokens),
             "added_tokens": len(self.added_tokens),
-            "added_token_ids": list(self.added_token_ids),
+            "added_token_id_min": min(self.added_token_ids, default=None),
+            "added_token_id_max": max(self.added_token_ids, default=None),
+            "added_tokens_sha256": token_digest,
             "coverage_before": self.coverage_before,
             "initialization": "mean_of_original_subtoken_embeddings",
         }
