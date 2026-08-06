@@ -200,6 +200,10 @@ NUM_GPUS=3 bash recipes/qwen3-1.7b-mt-post/run.sh /verified/Qwen3-1.7B
 512 条生成退化 canary 和完整生成式评测。门禁或 canary 未通过时不会继续。原来的
 [`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/) 是 Base+CPT 负面对照，不再作为发布主线。
 
+经明确决定需要在门禁失败后继续做全量消融时，必须同时设置 `ALLOW_FAILED_GATE=1` 和
+非空的 `GATE_WAIVER_REASON`。默认行为仍是硬停止；豁免运行会在独立实验目录写入
+`GATE_WAIVER`，确保后续报告和论文中能够追踪这一协议偏差。
+
 ## 评测原则
 
 至少比较以下模型状态：

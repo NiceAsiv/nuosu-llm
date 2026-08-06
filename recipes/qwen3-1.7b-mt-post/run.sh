@@ -14,6 +14,8 @@ RUN_DIR="${PROJECT_DIR}/artifacts/pipeline/qwen3-1.7b-mt-post/${RUN_ID}"
 EVAL_DIR="${RUN_DIR}/evaluation"
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2}"
 EVAL_BASELINE="${EVAL_BASELINE:-1}"
+ALLOW_FAILED_GATE="${ALLOW_FAILED_GATE:-0}"
+GATE_WAIVER_REASON="${GATE_WAIVER_REASON:-}"
 
 export CUDA_VISIBLE_DEVICES HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export HF_DATASETS_OFFLINE=1 OMP_NUM_THREADS=1 PYTHONUNBUFFERED=1
@@ -55,7 +57,24 @@ cd "${PROJECT_DIR}"
   --launch-command "NUM_GPUS=${NUM_GPUS} bash recipes/qwen3-1.7b-mt-post/run.sh ${MODEL_DIR}"
 
 echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] running recipe-matched MT gate"
-bash "${SCRIPT_DIR}/gate.sh" "${MODEL_DIR}"
+gate_exit=0
+bash "${SCRIPT_DIR}/gate.sh" "${MODEL_DIR}" || gate_exit=$?
+if (( gate_exit != 0 )); then
+  if [[ "${ALLOW_FAILED_GATE}" != "1" ]]; then
+    echo "MT gate failed; set ALLOW_FAILED_GATE=1 with GATE_WAIVER_REASON to run the full ablation." >&2
+    false
+  fi
+  [[ -n "${GATE_WAIVER_REASON}" ]] || {
+    echo "GATE_WAIVER_REASON is required when ALLOW_FAILED_GATE=1." >&2
+    false
+  }
+  printf '%s\n' \
+    "waived_at_utc=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    "gate_exit=${gate_exit}" \
+    "gate_metrics=${PROJECT_DIR}/artifacts/gates/qwen3-1.7b-mt-post-256/metrics.json" \
+    "reason=${GATE_WAIVER_REASON}" > "${RUN_DIR}/GATE_WAIVER"
+  echo "WARNING: continuing the full ablation under an explicitly recorded failed-gate waiver."
+fi
 
 latest_checkpoint() {
   find "$1" -maxdepth 1 -mindepth 1 -type d -name 'checkpoint-*' -printf '%p\n' 2>/dev/null |
