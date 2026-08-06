@@ -88,13 +88,14 @@ run_eval() {
   local label="$1"
   local input="$2"
   local output="$3"
-  shift 3
+  local max_new_tokens="$4"
+  shift 4
   if [[ ! -f "${output}" ]]; then
     "${PYTHON_BIN}" -m torch.distributed.run \
       --standalone --nproc_per_node="${NUM_GPUS}" \
       scripts/evaluate_prompts.py \
       --model "${MODEL_DIR}" --input "${input}" --output "${output}" \
-      --batch-size 8 --max-input-tokens 1024 --max-new-tokens 256 \
+      --batch-size 8 --max-input-tokens 1024 --max-new-tokens "${max_new_tokens}" \
       --thinking-mode no_think --resume "$@" 2>&1 | tee "${RUN_DIR}/evaluate-${label}.log"
   fi
   "${PYTHON_BIN}" scripts/score_evaluation.py \
@@ -106,7 +107,7 @@ run_eval() {
 echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] running 512-record collapse canary"
 CANARY_INPUT="${RUN_DIR}/canary.jsonl"
 head -n 512 "${DATASET_DIR}/test.jsonl" > "${CANARY_INPUT}"
-run_eval post-canary "${CANARY_INPUT}" "${EVAL_DIR}/post-canary-generations.jsonl" \
+run_eval post-canary "${CANARY_INPUT}" "${EVAL_DIR}/post-canary-generations.jsonl" 128 \
   --adapter "${SFT_OUTPUT}" --tokenizer "${SFT_OUTPUT}"
 "${PYTHON_BIN}" scripts/gates/check_overfit_metrics.py \
   --metrics "${EVAL_DIR}/post-canary-metrics.json" \
@@ -115,9 +116,9 @@ run_eval post-canary "${CANARY_INPUT}" "${EVAL_DIR}/post-canary-generations.json
   --result-output "${RUN_DIR}/canary-check.json"
 
 if [[ "${EVAL_BASELINE}" == "1" ]]; then
-  run_eval base "${DATASET_DIR}/test.jsonl" "${EVAL_DIR}/base-generations.jsonl"
+  run_eval base "${DATASET_DIR}/test.jsonl" "${EVAL_DIR}/base-generations.jsonl" 512
 fi
-run_eval post-mt "${DATASET_DIR}/test.jsonl" "${EVAL_DIR}/post-mt-generations.jsonl" \
+run_eval post-mt "${DATASET_DIR}/test.jsonl" "${EVAL_DIR}/post-mt-generations.jsonl" 512 \
   --adapter "${SFT_OUTPUT}" --tokenizer "${SFT_OUTPUT}"
 
 "${PYTHON_BIN}" scripts/inspect_adapter.py "${SFT_OUTPUT}" \

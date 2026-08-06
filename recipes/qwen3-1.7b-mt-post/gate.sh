@@ -71,7 +71,7 @@ CUDA_VISIBLE_DEVICES=0 "${PYTHON_BIN}" scripts/evaluate_prompts.py \
   --output "${GATE_DIR}/generations.jsonl" \
   --batch-size 8 \
   --max-input-tokens 512 \
-  --max-new-tokens 128 \
+  --max-new-tokens 512 \
   --thinking-mode no_think
 
 "${PYTHON_BIN}" scripts/score_evaluation.py \
