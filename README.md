@@ -190,8 +190,15 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 world_size × per_device_train_batch_size × gradient_accumulation_steps
 ```
 
-专用翻译任务应使用会自动评测的
-[`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/)；旧的通用1.7B配方仅保留作历史对照。
+专用翻译任务的当前主线使用官方 post-trained Qwen3-1.7B，并跳过会强化续写倾向的 CPT：
+
+```bash
+NUM_GPUS=3 bash recipes/qwen3-1.7b-mt-post/run.sh /verified/Qwen3-1.7B
+```
+
+该入口强制先运行与正式配方一致的 256 条四方向过拟合门禁，再进行全量 MT-SFT、
+512 条生成退化 canary 和完整生成式评测。门禁或 canary 未通过时不会继续。原来的
+[`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/) 是 Base+CPT 负面对照，不再作为发布主线。
 
 ## 评测原则
 

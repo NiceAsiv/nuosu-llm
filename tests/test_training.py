@@ -10,6 +10,7 @@ from nuosu_llm.training import (
     load_stage_rows,
     require_verified_base_model,
     to_prompt_completion,
+    trainable_token_indices,
     training_sampling_strategy_name,
 )
 
@@ -17,6 +18,24 @@ from nuosu_llm.training import (
 class FakeTokenizer:
     def __init__(self, chat_template=None):
         self.chat_template = chat_template
+
+
+def test_explicit_stop_tokens_are_added_to_trainable_rows_without_duplicates():
+    class Encoding:
+        def __init__(self, ids):
+            self.ids = ids
+
+    class Tokenizer:
+        def encode(self, token, add_special_tokens=False):
+            del add_special_tokens
+            return Encoding({"<|im_end|>": [7], "<|endoftext|>": [8]}[token])
+
+    class Plan:
+        added_token_ids = (10, 11, 7)
+
+    assert trainable_token_indices(
+        Tokenizer(), Plan(), ["<|im_end|>", "<|endoftext|>"]
+    ) == (10, 11, 7, 8)
 
 
 def test_distributed_runtime_is_noop_without_cuda():

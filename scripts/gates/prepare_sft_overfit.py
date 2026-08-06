@@ -58,6 +58,45 @@ def select_balanced_records(
     return selected
 
 
+def select_balanced_directions(
+    records: list[dict[str, Any]], *, limit: int, directions: list[str]
+) -> list[dict[str, Any]]:
+    """Select a deterministic, near-uniform sample across MT directions."""
+    normalized = []
+    for direction in directions:
+        value = direction.replace("→", "->")
+        if "->" not in value:
+            raise ValueError(f"invalid direction: {direction!r}")
+        normalized.append(value)
+    if not normalized or len(set(normalized)) != len(normalized):
+        raise ValueError("directions must be a non-empty list of unique values")
+    base, remainder = divmod(limit, len(normalized))
+    quotas = {
+        direction: base + (index < remainder)
+        for index, direction in enumerate(normalized)
+    }
+    selected: list[dict[str, Any]] = []
+    counts: Counter[str] = Counter()
+    for record in records:
+        direction = (
+            f"{record.get('source_lang') or ''}->{record.get('target_lang') or ''}"
+        )
+        if direction not in quotas or counts[direction] >= quotas[direction]:
+            continue
+        selected.append(record)
+        counts[direction] += 1
+        if len(selected) == limit:
+            break
+    missing = {
+        direction: quotas[direction] - counts[direction]
+        for direction in normalized
+        if counts[direction] < quotas[direction]
+    }
+    if missing:
+        raise ValueError(f"not enough rows for balanced directions: {missing}")
+    return selected
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create deterministic train and generation views for the SFT overfit gate"
@@ -71,6 +110,11 @@ def main() -> None:
         nargs="+",
         help="Select a deterministic near-uniform sample across these task names",
     )
+    parser.add_argument(
+        "--balanced-directions",
+        nargs="+",
+        help="Select a deterministic near-uniform MT sample across source->target directions",
+    )
     args = parser.parse_args()
 
     source_rows: list[dict[str, Any]] = []
@@ -78,7 +122,13 @@ def main() -> None:
         for line in handle:
             if line.strip():
                 source_rows.append(json.loads(line))
-    if args.balanced_tasks:
+    if args.balanced_tasks and args.balanced_directions:
+        raise ValueError("balanced-tasks and balanced-directions are mutually exclusive")
+    if args.balanced_directions:
+        source_rows = select_balanced_directions(
+            source_rows, limit=args.limit, directions=args.balanced_directions
+        )
+    elif args.balanced_tasks:
         source_rows = select_balanced_records(
             source_rows, limit=args.limit, tasks=args.balanced_tasks
         )

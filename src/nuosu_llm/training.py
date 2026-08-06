@@ -71,6 +71,22 @@ def training_sampling_strategy_name(group_by_length: bool) -> str:
     return "group_by_length" if group_by_length else "random"
 
 
+def trainable_token_indices(
+    tokenizer: Any,
+    expansion_plan: Any | None,
+    token_strings: list[str] | tuple[str, ...] | None,
+) -> tuple[int, ...]:
+    """Combine added vocabulary rows with explicitly trainable stop tokens."""
+    token_ids = list(expansion_plan.added_token_ids) if expansion_plan else []
+    for token in token_strings or ():
+        encoded = tokenizer.encode(str(token), add_special_tokens=False)
+        encoded_ids = encoded.ids if hasattr(encoded, "ids") else encoded
+        if len(encoded_ids) != 1:
+            raise ValueError(f"可训练 token 必须恰好编码为一个 ID: {token!r}")
+        token_ids.append(int(encoded_ids[0]))
+    return tuple(dict.fromkeys(token_ids))
+
+
 def to_prompt_completion(
     messages: list[dict[str, Any]], *, append_no_think: bool
 ) -> dict[str, list[dict[str, Any]]]:
@@ -230,6 +246,11 @@ def run_training(config: dict[str, Any]) -> None:
         if expansion_config.get("enabled", False)
         else None
     )
+    trainable_ids = trainable_token_indices(
+        tokenizer,
+        expansion_plan,
+        expansion_config.get("trainable_existing_tokens"),
+    )
 
     model_kwargs = {
         "quantization_config": quantization_config,
@@ -297,11 +318,9 @@ def run_training(config: dict[str, Any]) -> None:
             bias=lora.get("bias", "none"),
             task_type="CAUSAL_LM",
             trainable_token_indices=(
-                list(expansion_plan.added_token_ids)
-                if expansion_plan is not None
-                else None
+                list(trainable_ids) if trainable_ids else None
             ),
-            ensure_weight_tying=bool(expansion_plan is not None),
+            ensure_weight_tying=bool(trainable_ids),
         )
 
     report_to = training.get("report_to", "none")
@@ -410,6 +429,10 @@ def run_training(config: dict[str, Any]) -> None:
             "tokenizer_expansion": (
                 expansion_plan.manifest() if expansion_plan is not None else None
             ),
+            "explicit_trainable_tokens": list(
+                expansion_config.get("trainable_existing_tokens") or []
+            ),
+            "trainable_token_rows": len(trainable_ids),
         }
         print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))
 

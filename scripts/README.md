@@ -15,7 +15,8 @@
 | 多卡训练 | `torchrun --nproc_per_node=N scripts/train.py ...` |
 | 多卡评测 | `torchrun --nproc_per_node=N scripts/evaluate_prompts.py ...` |
 | 自动评分 | `python scripts/score_evaluation.py ...` |
-| 1.7B 全流程 | `NUM_GPUS=3 bash recipes/qwen3-1.7b-mt/run.sh` |
+| 1.7B post-trained 全流程 | `NUM_GPUS=3 bash recipes/qwen3-1.7b-mt-post/run.sh /verified/Qwen3-1.7B` |
+| 1.7B Base+CPT 负面对照 | `NUM_GPUS=3 bash recipes/qwen3-1.7b-mt/run.sh` |
 | 合并 adapter | `python scripts/merge_adapter.py ...` |
 
 ## 目录职责
