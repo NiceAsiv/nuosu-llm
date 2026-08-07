@@ -204,6 +204,9 @@ NUM_GPUS=3 bash recipes/qwen3-1.7b-mt-post/run.sh /verified/Qwen3-1.7B
 非空的 `GATE_WAIVER_REASON`。默认行为仍是硬停止；豁免运行会在独立实验目录写入
 `GATE_WAIVER`，确保后续报告和论文中能够追踪这一协议偏差。
 
+清洗后的 MT 实验应设置 `NUOSU_DATASET_DIR`、`NUOSU_SFT_OUTPUT`、`GATE_DIR` 和
+`OUTPUT_DIR` 指向独立目录，保留未清洗 v1 的数据、adapter 与评测结果作为对照。
+
 ## 评测原则
 
 至少比较以下模型状态：
