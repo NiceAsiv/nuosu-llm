@@ -33,6 +33,16 @@ _QUOTED_TEXT = re.compile(r"“([^”]+)”|‘([^’]+)’|\"([^\"]+)\"|'([^']+
 _CJK = re.compile(r"[\u3400-\u9fff]")
 _LATIN = re.compile(r"[A-Za-z]")
 _SPACE = re.compile(r"\s+")
+_META_EVALUATION_EXACT = frozenset(
+    {
+        "correct",
+        "正确",
+        "翻译正确",
+        "是的，翻译正确",
+        "正确，彝文和汉语对应准确",
+    }
+)
+_META_EVALUATION_PREFIXES = ("错误，正确翻译应该是：", "错误，正确翻译应为：")
 
 
 def contains_yi(text: str) -> bool:
@@ -255,6 +265,28 @@ def quality_bucket(record: dict[str, Any], source: str, target: str) -> str:
     return "mt_translation_sentence"
 
 
+def is_meta_evaluation_target(answer: str, record: dict[str, Any]) -> bool:
+    """Detect benchmark answer-verdict text accidentally mixed into MT targets.
+
+    NuosuBench bootstrap records contain both genuine translations and evaluator
+    turns.  We therefore filter only verdict-shaped targets from that source,
+    preserving literal translations such as the Chinese word “正确” elsewhere.
+    Evaluation references are never passed through this filter.
+    """
+
+    metadata = record.get("metadata") or {}
+    source_tag = " ".join(
+        str(metadata.get(key) or "") for key in ("source_id", "source_dataset")
+    )
+    source_tag = f"{source_tag} {record.get('id') or ''}".casefold()
+    if "nuosu-bench-bootstrap" not in source_tag:
+        return False
+    normalized = _SPACE.sub(" ", answer.strip()).casefold()
+    return normalized in _META_EVALUATION_EXACT or any(
+        normalized.startswith(prefix.casefold()) for prefix in _META_EVALUATION_PREFIXES
+    )
+
+
 def project_mt_record(
     record: dict[str, Any], *, evaluation: bool = False
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -275,6 +307,8 @@ def project_mt_record(
         answer = str(messages[-1].get("content") or "").strip()
     if not prompt or not answer:
         return None, "missing_prompt_or_answer"
+    if not evaluation and is_meta_evaluation_target(answer, record):
+        return None, "meta_evaluation_target"
     metadata = dict(record.get("metadata") or {})
     direction = infer_direction(prompt, answer, metadata)
     if direction is None:
@@ -418,6 +452,13 @@ def prepare_mt_dataset(
         "prompt_templates": {
             f"{source}->{target}": prompt
             for (source, target), prompt in MT_PROMPTS.items()
+        },
+        "cleaning": {
+            "drop_meta_evaluation_targets": True,
+            "reason": "meta_evaluation_target",
+            "source_scope": "nuosu-bench-bootstrap",
+            "exact_targets": sorted(_META_EVALUATION_EXACT),
+            "prefix_targets": list(_META_EVALUATION_PREFIXES),
         },
         "splits": {
             "train": prepare_split(train_path, target_dir / "train.jsonl", evaluation=False),

@@ -92,3 +92,54 @@ def test_strips_chinese_wrapper_from_unquoted_yi_target():
 
 def test_mt_prompt_requires_supported_direction():
     assert build_mt_prompt("zh", "ii", "你好").endswith("\n你好")
+
+
+def test_drops_nuosubench_verdict_target_from_training():
+    projected, reason = project_mt_record(
+        {
+            "id": "nuosu-bench-bootstrap-verdict-1",
+            "task": "translation",
+            "metadata": {"source_id": "nuosu-bench-bootstrap"},
+            "messages": [
+                {"role": "user", "content": "请将以下凉山规范彝文翻译为英文。\nꋑꎆ"},
+                {"role": "assistant", "content": "Correct"},
+            ],
+        }
+    )
+
+    assert projected is None
+    assert reason == "meta_evaluation_target"
+
+
+def test_preserves_literal_correct_translation_from_other_source():
+    projected, reason = project_mt_record(
+        {
+            "id": "dict-correct-1",
+            "task": "translation",
+            "metadata": {"source_id": "yixueyanjiu-dict", "direction": "ii-to-zh"},
+            "messages": [
+                {"role": "user", "content": "请将以下凉山规范彝文翻译为中文。\nꎃꊒ"},
+                {"role": "assistant", "content": "正确"},
+            ],
+        }
+    )
+
+    assert reason is None
+    assert projected is not None
+    assert projected["target"] == "正确"
+
+
+def test_keeps_verdict_text_when_projecting_evaluation_reference():
+    projected, reason = project_mt_record(
+        {
+            "id": "nuosu-bench-bootstrap-eval-1",
+            "metadata": {"source_id": "nuosu-bench-bootstrap"},
+            "messages": [{"role": "user", "content": "请将以下凉山规范彝文翻译为中文。\nꎃꊒ"}],
+            "reference": "正确",
+        },
+        evaluation=True,
+    )
+
+    assert reason is None
+    assert projected is not None
+    assert projected["reference"] == "正确"
