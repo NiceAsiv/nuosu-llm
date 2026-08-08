@@ -129,6 +129,25 @@ def test_preserves_literal_correct_translation_from_other_source():
     assert projected["target"] == "正确"
 
 
+def test_recovers_corrected_translation_from_benchmark_verdict():
+    projected, reason = project_mt_record(
+        {
+            "id": "nuosu-bench-bootstrap-correction-1",
+            "task": "translation",
+            "metadata": {"source_id": "nuosu-bench-bootstrap"},
+            "messages": [
+                {"role": "user", "content": "请将以下凉山规范彝文翻译为中文。\nꇉꇬꒉꌺ"},
+                {"role": "assistant", "content": "错误，正确翻译应该是：洛果小河"},
+            ],
+        }
+    )
+
+    assert reason is None
+    assert projected is not None
+    assert projected["target"] == "洛果小河"
+    assert projected["metadata"]["mt_cleaning"] == "meta_evaluation_correction_recovered"
+
+
 def test_keeps_verdict_text_when_projecting_evaluation_reference():
     projected, reason = project_mt_record(
         {

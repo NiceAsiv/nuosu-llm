@@ -265,26 +265,43 @@ def quality_bucket(record: dict[str, Any], source: str, target: str) -> str:
     return "mt_translation_sentence"
 
 
-def is_meta_evaluation_target(answer: str, record: dict[str, Any]) -> bool:
-    """Detect benchmark answer-verdict text accidentally mixed into MT targets.
-
-    NuosuBench bootstrap records contain both genuine translations and evaluator
-    turns.  We therefore filter only verdict-shaped targets from that source,
-    preserving literal translations such as the Chinese word “正确” elsewhere.
-    Evaluation references are never passed through this filter.
-    """
-
+def _meta_evaluation_source(record: dict[str, Any]) -> bool:
     metadata = record.get("metadata") or {}
     source_tag = " ".join(
         str(metadata.get(key) or "") for key in ("source_id", "source_dataset")
     )
     source_tag = f"{source_tag} {record.get('id') or ''}".casefold()
-    if "nuosu-bench-bootstrap" not in source_tag:
-        return False
+    return "nuosu-bench-bootstrap" in source_tag
+
+
+def clean_meta_evaluation_target(
+    answer: str, record: dict[str, Any]
+) -> tuple[str | None, str | None]:
+    """Drop verdict labels and recover targets from corrected benchmark answers.
+
+    NuosuBench bootstrap records contain both genuine translations and evaluator
+    turns.  Exact verdict labels are unusable; a response beginning with
+    ``错误，正确翻译应该是：`` contains a recoverable target after the prefix.
+    """
+
+    if not _meta_evaluation_source(record):
+        return answer, None
     normalized = _SPACE.sub(" ", answer.strip()).casefold()
-    return normalized in _META_EVALUATION_EXACT or any(
-        normalized.startswith(prefix.casefold()) for prefix in _META_EVALUATION_PREFIXES
-    )
+    if normalized in _META_EVALUATION_EXACT:
+        return None, "meta_evaluation_target"
+    stripped = answer.strip()
+    for prefix in _META_EVALUATION_PREFIXES:
+        if normalized.startswith(prefix.casefold()):
+            recovered = stripped[len(prefix) :].strip()
+            return recovered or None, "meta_evaluation_correction_recovered"
+    return answer, None
+
+
+def is_meta_evaluation_target(answer: str, record: dict[str, Any]) -> bool:
+    """Return whether an answer is an exact, unusable benchmark verdict label."""
+
+    _, reason = clean_meta_evaluation_target(answer, record)
+    return reason == "meta_evaluation_target"
 
 
 def project_mt_record(
@@ -307,9 +324,14 @@ def project_mt_record(
         answer = str(messages[-1].get("content") or "").strip()
     if not prompt or not answer:
         return None, "missing_prompt_or_answer"
-    if not evaluation and is_meta_evaluation_target(answer, record):
-        return None, "meta_evaluation_target"
+    cleaning_reason: str | None = None
+    if not evaluation:
+        answer, cleaning_reason = clean_meta_evaluation_target(answer, record)
+        if answer is None:
+            return None, "meta_evaluation_target"
     metadata = dict(record.get("metadata") or {})
+    if cleaning_reason:
+        metadata["mt_cleaning"] = cleaning_reason
     direction = infer_direction(prompt, answer, metadata)
     if direction is None:
         return None, "unknown_direction"
@@ -385,6 +407,7 @@ def prepare_split(
     projected_rows: list[dict[str, Any]] = []
     rejected_rows: list[dict[str, Any]] = []
     rejected: Counter[str] = Counter()
+    recovered: Counter[str] = Counter()
     directions: Counter[str] = Counter()
     tasks: Counter[str] = Counter()
     seen: set[tuple[str, str, str, str]] = set()
@@ -415,6 +438,8 @@ def prepare_split(
             continue
         seen.add(key)
         projected_rows.append(projected)
+        if projected["metadata"].get("mt_cleaning"):
+            recovered[projected["metadata"]["mt_cleaning"]] += 1
         directions[f"{projected['source_lang']}->{projected['target_lang']}"] += 1
         tasks[projected["task"]] += 1
     count, sha256 = write_jsonl(output_path, projected_rows)
@@ -428,6 +453,7 @@ def prepare_split(
         "directions": dict(sorted(directions.items())),
         "tasks": dict(sorted(tasks.items())),
         "duplicates_removed": duplicates,
+        "recovered": dict(sorted(recovered.items())),
         "rejected": dict(sorted(rejected.items())),
         "rejected_audit": {
             "output": str(rejected_path),
@@ -455,6 +481,7 @@ def prepare_mt_dataset(
         },
         "cleaning": {
             "drop_meta_evaluation_targets": True,
+            "recover_corrected_targets": True,
             "reason": "meta_evaluation_target",
             "source_scope": "nuosu-bench-bootstrap",
             "exact_targets": sorted(_META_EVALUATION_EXACT),
