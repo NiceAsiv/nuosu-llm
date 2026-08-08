@@ -8,6 +8,21 @@
 - 单张 RTX 3090 24GB 或同等级 GPU；
 - 建议预留 100GB 以上缓存和 checkpoint 空间。
 
+## 0. 推荐的一条命令 MT 流程
+
+正式的 Qwen3-1.7B 翻译实验不要求人工逐段启动：
+
+```bash
+NUM_GPUS=3 bash recipes/qwen3-1.7b-mt/run.sh
+```
+
+它依次完成 MT 数据投影与拒绝审计、1,165 个音节和55个部首的词表扩充、CPT、SFT、
+断点恢复、基础模型与最终 adapter 的生成式评测、chrF2/CER/精确匹配评分、数值检查和哈希
+清单。只有 `COMPLETED` 标记存在时才能登记为完成实验；`FAILED` 会记录失败时间和退出码。
+
+新增 token 不是随机初始化：每个 token 使用扩充前子词 embedding 的均值初始化。PEFT
+只开放新增 token 行以及 LoRA 参数，避免训练和保存完整的15万词 embedding 矩阵。
+
 宿主机不需要安装完整 CUDA Toolkit；PyTorch 或 Docker 镜像可以携带所需 CUDA runtime。驱动版本必须兼容容器中的 CUDA runtime。
 
 ## 2. 安装

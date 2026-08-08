@@ -50,6 +50,17 @@ python scripts/model/smoke_test_base.py --model "${MODEL_DIR}"
 cp scripts/model/manifests/qwen3-1.7b-base-36be17a.sha256 "${MODEL_DIR}/VERIFIED.sha256"
 ```
 
+The current 1.7B MT release line uses the official post-trained checkpoint:
+
+```bash
+MODEL_DIR=/absolute/path/to/models/Qwen3-1.7B-70d244cc
+python scripts/model/download_snapshot.py \
+  --repo-id Qwen/Qwen3-1.7B \
+  --revision 70d244cc86ccca08cf5af4e1e306ecf908b1ad5e \
+  --output-dir "${MODEL_DIR}"
+(cd "${MODEL_DIR}" && sha256sum --check VERIFIED.sha256)
+```
+
 训练入口要求本地模型目录存在 `VERIFIED.sha256`。如果需要隔离已经损坏的缓存和派生
 adapter，请使用按日期归档的 [`../../patches/2026-07-29/`](../../patches/2026-07-29/)；
 该补丁不是正常下载流程。

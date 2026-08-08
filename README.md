@@ -12,6 +12,23 @@ models for Standard Liangshan Yi (Nuosu). The current research line studies
 whether low-rank Nuosu adaptation can improve language capability while
 preserving the reasoning behavior of a post-trained foundation model.
 
+## 当前推荐：Qwen3-1.7B 专用翻译流水线
+
+新的速度主线使用 `Qwen/Qwen3-1.7B-Base`，把全部 1,165 个规范彝文音节和55个彝文
+部首加入 tokenizer，并只训练新增 embedding 行与 rank-64 LoRA。语料会被确定性投影为
+“源文本→纯译文”，所有无法可靠确定翻译方向或抽取目标的记录进入拒绝审计文件，不会静默
+混入训练。
+
+在三张 RTX 3090 服务器上一条命令完成数据准备、CPT、SFT、断点恢复、基础模型对照、完整
+生成式评测、自动评分和产物校验：
+
+```bash
+NUM_GPUS=3 bash recipes/qwen3-1.7b-mt/run.sh
+```
+
+流程只有生成 `artifacts/pipeline/qwen3-1.7b-mt/<run-id>/COMPLETED` 才算结束。完整配置与
+恢复规则见 [`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/)。
+
 ## 研究概览
 
 当前开发实验以固定版本的 `Qwen/Qwen3-8B` 为起点，采用两阶段 QLoRA：
@@ -27,11 +44,11 @@ SFT 仅在每条训练提示的最后一个用户消息中加入 `/no_think`，�
 |---|---|
 | 基础模型 | `Qwen/Qwen3-8B` |
 | 模型 revision | `b968826d9c46dd6066d109eabc6255188de91218` |
-| 训练语料 | `NiceAsiv/nuosu-corpus@v2026.08.02` |
+| 训练语料 | 改进配方：`NiceAsiv/nuosu-corpus@v2026.08.04` |
 | CPT | 4,238 条，约 366 万 token；训练前无损切分至 2,048 token |
-| SFT | 113,269 条，约 664 万 token |
-| 参数高效微调 | QLoRA NF4、BF16 compute、LoRA rank 16 |
-| 当前阶段 | seed 42 开发实验；正式结论需多随机种子复现和母语者盲评 |
+| SFT | 201,756 条训练候选；10,839 条 validation；11,171 条 research test |
+| 参数高效微调 | QLoRA NF4、BF16 compute；改进配方 LoRA rank 32、all-linear |
+| 当前阶段 | 旧 rank-16 实验未通过彝语门禁；改进配方须先通过过拟合门禁 |
 
 训练 loss、公开基准分数或少量示例都不能单独证明彝语质量。本项目在完整评测和母语者审核
 完成前不宣称模型已经达到可部署水平。
@@ -84,9 +101,9 @@ python -m pytest -q
 python scripts/download_training_corpus.py
 ```
 
-脚本下载 `NiceAsiv/nuosu-corpus@v2026.08.02`，并根据数据集 `manifest.json` 校验
-`ready_cpt.jsonl` 和 `ready_sft.jsonl` 的记录数与 SHA-256。训练配置不会读取可变的 `main`
-分支。
+脚本下载 `NiceAsiv/nuosu-corpus@v2026.08.04`，并根据数据集 `manifest.json` 校验
+训练、validation、research test 和 CPT 文件的记录数与 SHA-256。训练配置不会读取可变的
+`main` 分支。
 
 ### 2. 下载并验证基础模型
 
@@ -150,13 +167,20 @@ CPT adapter 只有在固定推理 canary 的答案保持率、完整思考率和
 
 ### 5. SFT
 
-`configs/sft_qwen3_8b_qlora.yaml` 默认从 CPT adapter 继续训练，并对113,269条记录执行一轮
-全量 completion-only SFT：
+先运行与正式训练同模板的 64 条规范字—拼音—IPA 过拟合门禁：
+
+```bash
+bash scripts/gates/run_sft_overfit_64.sh "${MODEL_DIR}"
+```
+
+门禁通过后，`configs/sft_qwen3_8b_balanced_qlora.yaml` 从 post-trained Base 新建 rank-32
+all-linear LoRA。它使用 NuosuBench 固定 train split、独立 validation、completion-only loss，
+并只通过重复采样增强读音、问答与术语任务，不删除任何训练记录：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
   scripts/train.py \
-  --config configs/sft_qwen3_8b_qlora.yaml \
+  --config configs/sft_qwen3_8b_balanced_qlora.yaml \
   --base-model "${MODEL_DIR}"
 ```
 
@@ -166,7 +190,22 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 world_size × per_device_train_batch_size × gradient_accumulation_steps
 ```
 
-较小算力环境可参考 [`recipes/qwen3-1.7b-full/`](recipes/qwen3-1.7b-full/) 的1.7B两阶段配方。
+专用翻译任务的当前主线使用官方 post-trained Qwen3-1.7B，并跳过会强化续写倾向的 CPT：
+
+```bash
+NUM_GPUS=3 bash recipes/qwen3-1.7b-mt-post/run.sh /verified/Qwen3-1.7B
+```
+
+该入口强制先运行与正式配方一致的 256 条四方向过拟合门禁，再进行全量 MT-SFT、
+512 条生成退化 canary 和完整生成式评测。门禁或 canary 未通过时不会继续。原来的
+[`recipes/qwen3-1.7b-mt/`](recipes/qwen3-1.7b-mt/) 是 Base+CPT 负面对照，不再作为发布主线。
+
+经明确决定需要在门禁失败后继续做全量消融时，必须同时设置 `ALLOW_FAILED_GATE=1` 和
+非空的 `GATE_WAIVER_REASON`。默认行为仍是硬停止；豁免运行会在独立实验目录写入
+`GATE_WAIVER`，确保后续报告和论文中能够追踪这一协议偏差。
+
+清洗后的 MT 实验应设置 `NUOSU_DATASET_DIR`、`NUOSU_SFT_OUTPUT`、`GATE_DIR` 和
+`OUTPUT_DIR` 指向独立目录，保留未清洗 v1 的数据、adapter 与评测结果作为对照。
 
 ## 评测原则
 
@@ -183,14 +222,34 @@ world_size × per_device_train_batch_size × gradient_accumulation_steps
 - GSM8K、MMLU-Pro、IFEval 等通用能力回归；
 - 母语者对正确性、流利度、规范性和幻觉的盲评。
 
-当前低资源策略将所有可用发布语料用于训练，因此 NuosuBench 与训练来源可能存在文本级或
-作品级重合。其结果只能作为披露重合后的诊断指标，不能描述为无污染测试。论文级比较应在
-冻结训练配方后使用独立盲评集，并报告多随机种子结果、均值、标准差和置信区间。
+NuosuBench 使用固定内容哈希切分：train 参与梯度更新，validation 只用于 checkpoint 选择，
+research test 只在冻结配方后测评。它们来自同一公开上游 test split，因此结果必须描述为
+“同源学术研究切分”，不能描述为官方无污染测试。论文级比较还应使用独立母语者盲评集，
+并报告多随机种子结果、均值、标准差和置信区间。
 
 详见 [`evaluation/README.md`](evaluation/README.md) 和
 [`docs/04-evaluation.md`](docs/04-evaluation.md)。
 
 ## 使用 adapter
+
+训练完成后，服务器上直接执行：
+
+```bash
+# 交互式中译彝；输入 /swap 切换为彝译中
+bash scripts/translate_1_7b.sh
+
+# 单次翻译
+bash scripts/translate_1_7b.sh --text "我今天去学校。"
+
+# 明确指定彝译中
+bash scripts/translate_1_7b.sh \
+  --source-lang ii --target-lang zh --text "ꉢꑬꆏꏃꃅꌠꊐ。"
+```
+
+安装项目后也可以使用 `nuosu-translate`，模型路径通过 `NUOSU_BASE_MODEL`、
+`NUOSU_ADAPTER` 和 `NUOSU_TOKENIZER` 设置。翻译入口采用确定性解码且不保留多轮历史。
+
+通用聊天模型仍使用：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 nuosu-chat \

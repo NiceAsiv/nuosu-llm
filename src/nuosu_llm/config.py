@@ -40,6 +40,20 @@ def validate_config(config: dict[str, Any]) -> None:
             raise ConfigError(
                 "completion_only_loss 要求 prompt_completion: true"
             )
+    expansion = config.get("tokenizer_expansion", {})
+    if not isinstance(expansion, dict):
+        raise ConfigError("tokenizer_expansion 必须是 YAML 对象")
+    if expansion.get("enabled", False) and not (
+        expansion.get("add_standard_yi_syllables", True)
+        or expansion.get("add_yi_radicals", True)
+        or expansion.get("extra_tokens_file")
+    ):
+        raise ConfigError("tokenizer_expansion 已启用但没有请求任何 token")
+    trainable_existing = expansion.get("trainable_existing_tokens", [])
+    if not isinstance(trainable_existing, list) or not all(
+        isinstance(token, str) and token for token in trainable_existing
+    ):
+        raise ConfigError("trainable_existing_tokens 必须是非空字符串列表")
 
 
 def with_overrides(

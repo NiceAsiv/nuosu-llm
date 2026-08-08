@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from .tokenizer_expansion import resize_model_to_tokenizer
+
 
 def generation_stop_token_ids(tokenizer: Any) -> list[int]:
     eos_ids = tokenizer.eos_token_id
@@ -113,6 +115,7 @@ def main() -> None:
         )
     model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
     if args.adapter:
+        resize_model_to_tokenizer(model, tokenizer)
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
 

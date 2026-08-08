@@ -1,0 +1,71 @@
+stage: sft
+base_model: Qwen/Qwen3-8B
+train_file: ../nuosu-corpus/data/hf/nuosu-corpus/ready_sft.jsonl
+eval_file: ../nuosu-corpus/data/hf/nuosu-corpus/validation_sft.jsonl
+output_dir: outputs/qwen3-8b-nuosu-balanced-sft-v2
+seed: 42
+data_revision: v2026.08.04
+base_model_revision: b968826d9c46dd6066d109eabc6255188de91218
+data_policy: nuosubench_fixed_research_split_all_usable_task_balanced
+
+# Start a fresh SFT adapter from the post-trained base.  The prior CPT adapter
+# is rank-16 attention-only and cannot be expanded safely into this rank-32
+# all-linear adapter.  CPT and fresh-SFT remain separate experimental arms.
+
+data_sampling:
+  repeat_by_task:
+    pronunciation_orthography: 4
+    single_turn_qa: 8
+    terminology_translation: 4
+
+quantization:
+  enabled: true
+  bits: 4
+  quant_type: nf4
+  double_quant: true
+  compute_dtype: bfloat16
+
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: all-linear
+  bias: none
+
+training:
+  max_length: 2048
+  packing: false
+  attn_implementation: sdpa
+  assistant_only_loss: false
+  completion_only_loss: true
+  prompt_completion: true
+  append_no_think: true
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 8
+  gradient_checkpointing: true
+  learning_rate: 0.00005
+  num_train_epochs: 1
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lr_scheduler_type: cosine
+  logging_steps: 10
+  eval_strategy: steps
+  eval_steps: 1000
+  save_strategy: steps
+  save_steps: 1000
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: eval_loss
+  greater_is_better: false
+  bf16: true
+  fp16: false
+  tf32: true
+  dataloader_num_workers: 0
+  optim: adamw_torch_fused
+  max_grad_norm: 1.0
+  ddp_find_unused_parameters: false
+  ddp_broadcast_buffers: false
+  sanitize_nonfinite_gradients: true
+  report_to: none
+  resume_from_checkpoint: null

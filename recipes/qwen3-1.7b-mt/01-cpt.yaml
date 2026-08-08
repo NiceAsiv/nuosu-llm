@@ -1,0 +1,60 @@
+stage: cpt
+base_model: Qwen/Qwen3-1.7B-Base
+train_file: ../nuosu-corpus/data/task_corpus_20260804_v2/ready_cpt.jsonl
+output_dir: outputs/qwen3-1.7b-nuosu-mt-cpt-v20260805
+seed: 42
+data_revision: v2026.08.04
+data_policy: all_usable_cpt_token_adaptation
+
+tokenizer_expansion:
+  enabled: true
+  add_standard_yi_syllables: true
+  add_yi_radicals: true
+  extra_tokens_file: null
+  pad_to_multiple_of: 64
+
+quantization:
+  enabled: false
+  compute_dtype: bfloat16
+
+lora:
+  r: 64
+  alpha: 128
+  dropout: 0.05
+  target_modules: all-linear
+  bias: none
+
+training:
+  max_length: 2048
+  packing: false
+  assistant_only_loss: false
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 4
+  gradient_checkpointing: true
+  learning_rate: 0.00003
+  num_train_epochs: 2
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  lr_scheduler_type: cosine
+  logging_steps: 10
+  eval_strategy: "no"
+  save_strategy: steps
+  save_steps: 250
+  save_total_limit: 2
+  bf16: true
+  fp16: false
+  tf32: true
+  attn_implementation: sdpa
+  group_by_length: true
+  dataloader_num_workers: 2
+  dataloader_prefetch_factor: 2
+  dataloader_pin_memory: true
+  dataloader_persistent_workers: true
+  optim: adamw_torch_fused
+  max_grad_norm: 1.0
+  ddp_find_unused_parameters: false
+  ddp_broadcast_buffers: false
+  sanitize_nonfinite_gradients: true
+  report_to: none
+  resume_from_checkpoint: null

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 
+from nuosu_llm.tokenizer_expansion import resize_model_to_tokenizer
+
 
 def main() -> None:
     import torch
@@ -21,6 +23,7 @@ def main() -> None:
         device_map="cpu",
         low_cpu_mem_usage=True,
     )
+    resize_model_to_tokenizer(model, tokenizer)
     model = PeftModel.from_pretrained(model, args.adapter)
     merged = model.merge_and_unload()
     merged.save_pretrained(args.output, safe_serialization=True, max_shard_size="4GB")

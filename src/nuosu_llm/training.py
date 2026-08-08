@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config, with_overrides
+from .tokenizer_expansion import (
+    plan_tokenizer_expansion,
+    resize_and_initialize_embeddings,
+    write_expansion_manifest,
+)
 
 QWEN3_ASSISTANT_MASK_CHAT_TEMPLATE = (
     "{% for message in messages %}"
@@ -66,6 +71,22 @@ def training_sampling_strategy_name(group_by_length: bool) -> str:
     return "group_by_length" if group_by_length else "random"
 
 
+def trainable_token_indices(
+    tokenizer: Any,
+    expansion_plan: Any | None,
+    token_strings: list[str] | tuple[str, ...] | None,
+) -> tuple[int, ...]:
+    """Combine added vocabulary rows with explicitly trainable stop tokens."""
+    token_ids = list(expansion_plan.added_token_ids) if expansion_plan else []
+    for token in token_strings or ():
+        encoded = tokenizer.encode(str(token), add_special_tokens=False)
+        encoded_ids = encoded.ids if hasattr(encoded, "ids") else encoded
+        if len(encoded_ids) != 1:
+            raise ValueError(f"可训练 token 必须恰好编码为一个 ID: {token!r}")
+        token_ids.append(int(encoded_ids[0]))
+    return tuple(dict.fromkeys(token_ids))
+
+
 def to_prompt_completion(
     messages: list[dict[str, Any]], *, append_no_think: bool
 ) -> dict[str, list[dict[str, Any]]]:
@@ -92,6 +113,7 @@ def load_stage_rows(
     *,
     prompt_completion: bool = False,
     append_no_think: bool = False,
+    repeat_by_task: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Load only trainer-facing fields so heterogeneous metadata cannot break Arrow."""
     if stage not in {"cpt", "sft"}:
@@ -111,12 +133,20 @@ def load_stage_rows(
                 raise ValueError(f"{path}:{line_number}: CPT 记录缺少非空 text")
             if stage == "sft" and (not isinstance(value, list) or not value):
                 raise ValueError(f"{path}:{line_number}: SFT 记录缺少非空 messages")
-            if stage == "sft" and prompt_completion:
-                rows.append(
-                    to_prompt_completion(value, append_no_think=append_no_think)
-                )
-            else:
-                rows.append({field: value})
+            repeat = 1
+            if stage == "sft" and repeat_by_task:
+                task = str(record.get("task") or "")
+                repeat = repeat_by_task.get(task, 1)
+                if not isinstance(repeat, int) or repeat < 1:
+                    raise ValueError(
+                        f"{path}:{line_number}: task {task!r} 的重复次数必须是正整数"
+                    )
+            trainer_row = (
+                to_prompt_completion(value, append_no_think=append_no_think)
+                if stage == "sft" and prompt_completion
+                else {field: value}
+            )
+            rows.extend(deepcopy(trainer_row) for _ in range(repeat))
     if not rows:
         raise ValueError(f"{path}: 没有可用的 {stage.upper()} 记录")
     return rows
@@ -152,6 +182,31 @@ def run_training(config: dict[str, Any]) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
 
+    class CompactEmbeddingSFTTrainer(SFTTrainer):
+        """Prevent PEFT from redundantly saving full resized embedding matrices."""
+
+        def _save(
+            self,
+            output_dir: str | None = None,
+            state_dict: dict[str, Any] | None = None,
+        ) -> None:
+            if expansion_plan is None:
+                super()._save(output_dir=output_dir, state_dict=state_dict)
+                return
+            target_dir = output_dir or self.args.output_dir
+            os.makedirs(target_dir, exist_ok=True)
+            unwrapped = self.accelerator.unwrap_model(
+                self.model, keep_torch_compile=False
+            )
+            unwrapped.save_pretrained(
+                target_dir,
+                state_dict=state_dict,
+                save_embedding_layers=False,
+            )
+            if self.processing_class is not None:
+                self.processing_class.save_pretrained(target_dir)
+            torch.save(self.args, os.path.join(target_dir, "training_args.bin"))
+
     stage = config["stage"]
     quant = config.get("quantization", {})
     training = config["training"]
@@ -162,6 +217,10 @@ def run_training(config: dict[str, Any]) -> None:
     completion_only_loss = bool(training.get("completion_only_loss", False))
     prompt_completion = bool(training.get("prompt_completion", False))
     append_no_think = bool(training.get("append_no_think", False))
+    data_sampling = config.get("data_sampling", {})
+    repeat_by_task = data_sampling.get("repeat_by_task", {})
+    if not isinstance(repeat_by_task, dict):
+        raise ValueError("data_sampling.repeat_by_task 必须是 task 到正整数的映射")
     initialize_distributed_runtime(torch, local_rank, world_size)
 
     quantization_config = None
@@ -181,6 +240,17 @@ def run_training(config: dict[str, Any]) -> None:
     tokenizer.padding_side = "right"
     if stage == "sft":
         ensure_assistant_mask_chat_template(tokenizer, assistant_only_loss)
+    expansion_config = config.get("tokenizer_expansion", {})
+    expansion_plan = (
+        plan_tokenizer_expansion(tokenizer, expansion_config)
+        if expansion_config.get("enabled", False)
+        else None
+    )
+    trainable_ids = trainable_token_indices(
+        tokenizer,
+        expansion_plan,
+        expansion_config.get("trainable_existing_tokens"),
+    )
 
     model_kwargs = {
         "quantization_config": quantization_config,
@@ -191,6 +261,13 @@ def run_training(config: dict[str, Any]) -> None:
     if attn_implementation:
         model_kwargs["attn_implementation"] = attn_implementation
     model = AutoModelForCausalLM.from_pretrained(config["base_model"], **model_kwargs)
+    if expansion_plan is not None:
+        resize_and_initialize_embeddings(
+            model,
+            tokenizer,
+            expansion_plan,
+            pad_to_multiple_of=int(expansion_config.get("pad_to_multiple_of", 64)),
+        )
     model.config.use_cache = False
 
     init_adapter = config.get("init_adapter")
@@ -215,10 +292,14 @@ def run_training(config: dict[str, Any]) -> None:
         "prompt_completion": prompt_completion,
         "append_no_think": append_no_think,
     }
+    train_rows = load_stage_rows(
+        config["train_file"],
+        stage,
+        repeat_by_task=repeat_by_task,
+        **loader_kwargs,
+    )
     dataset_splits = {
-        "train": Dataset.from_list(
-            load_stage_rows(config["train_file"], stage, **loader_kwargs)
-        )
+        "train": Dataset.from_list(train_rows)
     }
     eval_path = config.get("eval_file")
     if eval_path and Path(eval_path).exists():
@@ -236,11 +317,18 @@ def run_training(config: dict[str, Any]) -> None:
             target_modules=lora.get("target_modules", "all-linear"),
             bias=lora.get("bias", "none"),
             task_type="CAUSAL_LM",
+            trainable_token_indices=(
+                list(trainable_ids) if trainable_ids else None
+            ),
+            ensure_weight_tying=bool(trainable_ids),
         )
 
     report_to = training.get("report_to", "none")
     report_targets = [] if report_to in {None, "none"} else [report_to]
     eval_enabled = "eval" in datasets
+    load_best_model_at_end = bool(
+        training.get("load_best_model_at_end", eval_enabled)
+    )
     train_batch_size = int(training.get("per_device_train_batch_size", 1))
     accumulation_steps = int(training.get("gradient_accumulation_steps", 16))
     dataloader_workers = int(training.get("dataloader_num_workers", 0))
@@ -268,9 +356,11 @@ def run_training(config: dict[str, Any]) -> None:
         weight_decay=float(training.get("weight_decay", 0.01)),
         lr_scheduler_type=training.get("lr_scheduler_type", "cosine"),
         logging_steps=int(training.get("logging_steps", 10)),
-        eval_strategy="steps" if eval_enabled else "no",
+        eval_strategy=training.get(
+            "eval_strategy", "steps" if eval_enabled else "no"
+        ),
         eval_steps=int(training.get("eval_steps", 250)),
-        save_strategy="steps",
+        save_strategy=training.get("save_strategy", "steps"),
         save_steps=int(training.get("save_steps", 250)),
         save_total_limit=int(training.get("save_total_limit", 3)),
         bf16=bool(training.get("bf16", True)),
@@ -289,13 +379,22 @@ def run_training(config: dict[str, Any]) -> None:
         ),
         optim=training.get("optim", "adamw_torch"),
         max_steps=int(training.get("max_steps", -1)),
+        load_best_model_at_end=load_best_model_at_end,
+        metric_for_best_model=(
+            training.get("metric_for_best_model", "eval_loss")
+            if load_best_model_at_end
+            else None
+        ),
+        greater_is_better=(
+            bool(training.get("greater_is_better", False))
+            if load_best_model_at_end
+            else None
+        ),
         report_to=report_targets,
     )
     if stage == "cpt":
         sft_kwargs["dataset_text_field"] = "text"
     train_sampling_strategy = training_sampling_strategy_name(group_by_length)
-    if group_by_length:
-        sft_kwargs["train_sampling_strategy"] = train_sampling_strategy
     if dataloader_workers > 0:
         sft_kwargs["dataloader_prefetch_factor"] = int(
             training.get("dataloader_prefetch_factor", 2)
@@ -322,12 +421,22 @@ def run_training(config: dict[str, Any]) -> None:
             "completion_only_loss": completion_only_loss,
             "prompt_completion": prompt_completion,
             "append_no_think": append_no_think,
+            "train_rows_after_sampling": len(train_rows),
+            "eval_rows": len(datasets.get("eval", [])),
+            "repeat_by_task": repeat_by_task,
             "preserves_original_chat_template": not assistant_only_loss,
             "attention": attn_implementation or "model_default",
+            "tokenizer_expansion": (
+                expansion_plan.manifest() if expansion_plan is not None else None
+            ),
+            "explicit_trainable_tokens": list(
+                expansion_config.get("trainable_existing_tokens") or []
+            ),
+            "trainable_token_rows": len(trainable_ids),
         }
         print("NUOSU_TRAINING_TOPOLOGY=" + json.dumps(startup_metrics, sort_keys=True))
 
-    trainer = SFTTrainer(
+    trainer = CompactEmbeddingSFTTrainer(
         model=model,
         args=sft_args,
         train_dataset=datasets["train"],
@@ -347,6 +456,11 @@ def run_training(config: dict[str, Any]) -> None:
     trainer.save_model(config["output_dir"])
     if trainer.is_world_process_zero():
         tokenizer.save_pretrained(config["output_dir"])
+        if expansion_plan is not None:
+            write_expansion_manifest(
+                Path(config["output_dir"]) / "tokenizer_expansion.json",
+                expansion_plan,
+            )
     if world_size > 1 and torch.distributed.is_initialized():
         torch.distributed.barrier()
         torch.distributed.destroy_process_group()

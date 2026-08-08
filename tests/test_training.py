@@ -10,6 +10,7 @@ from nuosu_llm.training import (
     load_stage_rows,
     require_verified_base_model,
     to_prompt_completion,
+    trainable_token_indices,
     training_sampling_strategy_name,
 )
 
@@ -17,6 +18,24 @@ from nuosu_llm.training import (
 class FakeTokenizer:
     def __init__(self, chat_template=None):
         self.chat_template = chat_template
+
+
+def test_explicit_stop_tokens_are_added_to_trainable_rows_without_duplicates():
+    class Encoding:
+        def __init__(self, ids):
+            self.ids = ids
+
+    class Tokenizer:
+        def encode(self, token, add_special_tokens=False):
+            del add_special_tokens
+            return Encoding({"<|im_end|>": [7], "<|endoftext|>": [8]}[token])
+
+    class Plan:
+        added_token_ids = (10, 11, 7)
+
+    assert trainable_token_indices(
+        Tokenizer(), Plan(), ["<|im_end|>", "<|endoftext|>"]
+    ) == (10, 11, 7, 8)
 
 
 def test_distributed_runtime_is_noop_without_cuda():
@@ -66,6 +85,61 @@ def test_sft_loader_keeps_only_messages(tmp_path):
     )
 
     assert load_stage_rows(path, "sft") == [{"messages": messages}]
+
+
+def test_sft_loader_repeats_selected_tasks_without_dropping_others(tmp_path):
+    path = tmp_path / "sft.jsonl"
+    records = [
+        {
+            "task": "pronunciation_orthography",
+            "messages": [
+                {"role": "user", "content": "怎么读？"},
+                {"role": "assistant", "content": "it"},
+            ],
+        },
+        {
+            "task": "translation",
+            "messages": [
+                {"role": "user", "content": "翻译"},
+                {"role": "assistant", "content": "ꀋꉬ"},
+            ],
+        },
+    ]
+    path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    rows = load_stage_rows(
+        path,
+        "sft",
+        repeat_by_task={"pronunciation_orthography": 3},
+    )
+
+    assert len(rows) == 4
+    assert sum(row["messages"][-1]["content"] == "it" for row in rows) == 3
+    assert sum(row["messages"][-1]["content"] == "ꀋꉬ" for row in rows) == 1
+
+
+def test_sft_loader_rejects_invalid_task_repeat(tmp_path):
+    path = tmp_path / "sft.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "task": "single_turn_qa",
+                "messages": [
+                    {"role": "user", "content": "问题"},
+                    {"role": "assistant", "content": "答案"},
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="正整数"):
+        load_stage_rows(path, "sft", repeat_by_task={"single_turn_qa": 0})
 
 
 def test_prompt_completion_adds_contextual_no_think_without_mutating_source():

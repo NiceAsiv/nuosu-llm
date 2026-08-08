@@ -63,18 +63,23 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--base-model", help="Local tokenizer/model path override")
+    parser.add_argument("--train-file", help="Training JSONL path override")
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.train_file:
+        config["train_file"] = args.train_file
     stage = config["stage"]
     training = config["training"]
     prompt_completion = bool(training.get("prompt_completion", False))
     append_no_think = bool(training.get("append_no_think", False))
+    repeat_by_task = config.get("data_sampling", {}).get("repeat_by_task", {})
     rows = load_stage_rows(
         config["train_file"],
         stage,
         prompt_completion=prompt_completion,
         append_no_think=append_no_think,
+        repeat_by_task=repeat_by_task,
     )
     if args.limit:
         rows = rows[: args.limit]
@@ -102,6 +107,7 @@ def main() -> None:
         "tokenizer": tokenizer_source,
         "prompt_completion": prompt_completion,
         "append_no_think": append_no_think,
+        "repeat_by_task": repeat_by_task,
         "samples": len(lengths),
         "max_length": max_length,
         "truncated_samples": sum(length > max_length for length in raw_lengths),
